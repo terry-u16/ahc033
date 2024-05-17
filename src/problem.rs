@@ -155,7 +155,7 @@ impl Yard {
         self.shipped_count as usize
     }
 
-    pub fn apply(&mut self, operations: &[Operation; Input::N]) -> Result<(), ()> {
+    pub fn apply(&mut self, operations: &[Operation; Input::N]) -> Result<(), &'static str> {
         for crane in 0..Input::N {
             match operations[crane] {
                 Operation::Up => self.move_crane(crane, -1, 0),
@@ -172,60 +172,62 @@ impl Yard {
         Ok(())
     }
 
-    fn move_crane(&mut self, crane: usize, dr: isize, dc: isize) -> Result<(), ()> {
+    fn move_crane(&mut self, crane: usize, dr: isize, dc: isize) -> Result<(), &'static str> {
         let new_state = match self.cranes[crane] {
             CraneState::Empty(coord) => CraneState::Empty(coord + CoordDiff::new(dr, dc)),
             CraneState::Holding(container, coord) => {
                 let new_coord = coord + CoordDiff::new(dr, dc);
 
                 if !Input::is_large_crane(crane) && self.grid[new_coord].is_some() {
-                    return Err(());
+                    return Err("Cannot move to a cell with a container");
                 }
 
                 CraneState::Holding(container, coord + CoordDiff::new(dr, dc))
             }
-            CraneState::Destroyed => return Err(()),
+            CraneState::Destroyed => return Err("Cannot move a destroyed crane"),
         };
 
         self.cranes[crane] = new_state;
         Ok(())
     }
 
-    fn pick(&mut self, crane: usize) -> Result<(), ()> {
+    fn pick(&mut self, crane: usize) -> Result<(), &'static str> {
         let CraneState::Empty(coord) = self.cranes[crane] else {
-            return Err(());
+            return Err("Tried to pick up a container while holding one");
         };
 
-        let container = self.grid[coord].take().ok_or(())?;
+        let container = self.grid[coord]
+            .take()
+            .ok_or("Tried to pick up a container but the cell is empty")?;
         self.cranes[crane] = CraneState::Holding(container, coord);
 
         Ok(())
     }
 
-    fn drop(&mut self, crane: usize) -> Result<(), ()> {
+    fn drop(&mut self, crane: usize) -> Result<(), &'static str> {
         let CraneState::Holding(container, coord) = self.cranes[crane] else {
-            return Err(());
+            return Err("Tried to drop a container while not holding one");
         };
 
         self.cranes[crane] = CraneState::Empty(coord);
         let place = self.grid[coord].as_mut();
 
         if place.is_some() {
-            return Err(());
+            return Err("Tried to drop a container but the cell is not empty");
         }
 
         self.grid[coord] = Some(container);
         Ok(())
     }
 
-    fn destroy(&mut self, crane: usize) -> Result<(), ()> {
+    fn destroy(&mut self, crane: usize) -> Result<(), &'static str> {
         match self.cranes[crane] {
             CraneState::Empty(_) => {
                 self.cranes[crane] = CraneState::Destroyed;
                 Ok(())
             }
-            CraneState::Holding(_, _) => Err(()),
-            CraneState::Destroyed => Err(()),
+            CraneState::Holding(_, _) => Err("Tried to destroy a crane holding a container"),
+            CraneState::Destroyed => Err("Tried to destroy a destroyed crane"),
         }
     }
 

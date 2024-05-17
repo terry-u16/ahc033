@@ -4,7 +4,7 @@ use crate::{
     problem::{Input, Operation, Output, Yard},
 };
 
-pub fn solve(input: &Input) -> Result<Output, ()> {
+pub fn solve(input: &Input) -> Result<Output, &'static str> {
     let mut yard = Yard::new(&input);
     let mut output = Output::new();
 
@@ -72,7 +72,7 @@ pub fn solve(input: &Input) -> Result<Output, ()> {
     Ok(output)
 }
 
-fn move_to(yard: &mut Yard, output: &mut Output, destination: Coord) -> Result<(), ()> {
+fn move_to(yard: &mut Yard, output: &mut Output, destination: Coord) -> Result<(), &'static str> {
     while yard.cranes()[0].coord().unwrap().row() < destination.row() {
         apply_single(yard, output, Operation::Down)?;
     }
@@ -92,7 +92,11 @@ fn move_to(yard: &mut Yard, output: &mut Output, destination: Coord) -> Result<(
     Ok(())
 }
 
-fn apply_single(yard: &mut Yard, output: &mut Output, operation: Operation) -> Result<(), ()> {
+fn apply_single(
+    yard: &mut Yard,
+    output: &mut Output,
+    operation: Operation,
+) -> Result<(), &'static str> {
     let mut operations = [Operation::None; Input::N];
 
     operations[0] = operation;
