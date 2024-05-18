@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use proconio::{input, marker::Usize1};
+use proconio::input;
 
 use crate::{
     data_structures::{ConstQueue, ConstVec},
@@ -287,6 +287,7 @@ impl Yard {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Output {
     operations: [Vec<Operation>; Input::N],
 }
@@ -302,6 +303,10 @@ impl Output {
         for (ops, &operation) in self.operations.iter_mut().zip(operations.iter()) {
             ops.push(operation);
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.operations.iter().map(|ops| ops.len()).max().unwrap()
     }
 }
 
