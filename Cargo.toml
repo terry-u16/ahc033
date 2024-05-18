@@ -1,3 +1,4 @@
+workspace = { members = ["max_stock"] }
 [profile.release]
 lto = true # コンパイル時間が著しく長くなってしまう場合は無し
 

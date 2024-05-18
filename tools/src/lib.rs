@@ -86,7 +86,11 @@ pub struct Output {
 }
 
 pub fn parse_output(input: &Input, f: &str) -> Result<Output, String> {
-    let out = f.trim().lines().map(|s| s.trim().chars().collect_vec()).collect_vec();
+    let out = f
+        .trim()
+        .lines()
+        .map(|s| s.trim().chars().collect_vec())
+        .collect_vec();
     if out.len() != input.A.len() {
         return Err("Invalid output format".to_owned());
     }
@@ -111,7 +115,8 @@ pub fn gen(seed: u64) -> Input {
 }
 
 pub fn compute_score(input: &Input, out: &Output) -> (i64, String) {
-    let (mut score, err, _) = compute_score_details(input, out, out.out.iter().map(|s| s.len()).max().unwrap());
+    let (mut score, err, _) =
+        compute_score_details(input, out, out.out.iter().map(|s| s.len()).max().unwrap());
     if err.len() > 0 {
         score = 0;
     }
@@ -134,7 +139,11 @@ pub struct State {
 impl State {
     fn new(input: &Input) -> Self {
         let mut board = mat![-1; input.n; input.n];
-        let mut A = input.A.iter().map(|a| a.iter().copied().rev().collect_vec()).collect_vec();
+        let mut A = input
+            .A
+            .iter()
+            .map(|a| a.iter().copied().rev().collect_vec())
+            .collect_vec();
         for i in 0..input.n {
             board[i][0] = A[i].pop().unwrap();
         }
@@ -190,7 +199,9 @@ impl State {
                     if x >= self.n || y >= self.n {
                         return Err(format!("Crane {i} moved out of the board."));
                     } else if i > 0 && z != -1 && self.board[x][y] != -1 {
-                        return Err(format!("Cranes {i} cannot move to a square that contains a container."));
+                        return Err(format!(
+                            "Cranes {i} cannot move to a square that contains a container."
+                        ));
                     }
                 }
                 'B' => {
@@ -228,12 +239,17 @@ impl State {
         }
         self.pos = to;
         for i in 0..self.n {
-            if self.board[i][0] == -1 && self.A[i].len() > 0 && self.pos.iter().all(|p| p.2 == -1 || (p.0, p.1) != (i, 0)) {
+            if self.board[i][0] == -1
+                && self.A[i].len() > 0
+                && self.pos.iter().all(|p| p.2 == -1 || (p.0, p.1) != (i, 0))
+            {
                 self.board[i][0] = self.A[i].pop().unwrap();
             }
             if self.board[i][self.n - 1] != -1 {
                 self.done += 1;
-                if (self.n * i) as i32 <= self.board[i][self.n - 1] && self.board[i][self.n - 1] < (self.n * (i + 1)) as i32 {
+                if (self.n * i) as i32 <= self.board[i][self.n - 1]
+                    && self.board[i][self.n - 1] < (self.n * (i + 1)) as i32
+                {
                     self.B[i].push(self.board[i][self.n - 1]);
                 }
                 self.board[i][self.n - 1] = -1;
@@ -264,7 +280,9 @@ impl State {
 pub fn compute_score_details(input: &Input, out: &Output, t: usize) -> (i64, String, State) {
     let mut state = State::new(input);
     for k in 0..t {
-        let mv = (0..input.n).map(|i| out.out[i].get(k).copied().unwrap_or('.')).collect_vec();
+        let mv = (0..input.n)
+            .map(|i| out.out[i].get(k).copied().unwrap_or('.'))
+            .collect_vec();
         if let Err(err) = state.apply(&mv) {
             return (0, format!("{err} (turn {k})"), state);
         }
@@ -292,7 +310,12 @@ pub fn color(mut val: f64) -> String {
             30. * (1.0 - x) + 70. * x,
         )
     };
-    format!("#{:02x}{:02x}{:02x}", r.round() as i32, g.round() as i32, b.round() as i32)
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        r.round() as i32,
+        g.round() as i32,
+        b.round() as i32
+    )
 }
 
 pub fn rect(x: usize, y: usize, w: usize, h: usize, fill: &str) -> Rectangle {
@@ -397,7 +420,10 @@ pub fn vis(input: &Input, out: &Output, t: usize) -> (i64, String, String) {
             ));
             doc = doc.add(
                 Text::new(format!("{}", state.B[i][j]))
-                    .set("x", D * (1 + state.n) + D / input.n * (input.n - j) + D / input.n / 2)
+                    .set(
+                        "x",
+                        D * (1 + state.n) + D / input.n * (input.n - j) + D / input.n / 2,
+                    )
                     .set("y", S + D * i + D / 2)
                     .set("font-size", D / input.n / 2)
                     .set("fill", "black"),
