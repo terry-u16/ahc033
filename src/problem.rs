@@ -156,6 +156,8 @@ impl Yard {
     }
 
     pub fn apply(&mut self, operations: &[Operation; Input::N]) -> Result<(), &'static str> {
+        let prev_coords = self.cranes.map(|c| c.coord());
+
         for crane in 0..Input::N {
             match operations[crane] {
                 Operation::Up => self.move_crane(crane, -1, 0),
@@ -167,6 +169,28 @@ impl Yard {
                 Operation::Destroy => self.destroy(crane),
                 Operation::None => Ok(()),
             }?;
+        }
+
+        let current_coords = self.cranes.map(|c| c.coord());
+
+        // クレーン交叉判定
+        for (i, (p0, c0)) in prev_coords.iter().zip(current_coords.iter()).enumerate() {
+            let (Some(p0), Some(c0)) = (p0, c0) else {
+                continue;
+            };
+
+            let p1 = &prev_coords[i + 1..];
+            let c1 = &current_coords[i + 1..];
+
+            for (p1, c1) in p1.iter().zip(c1.iter()) {
+                let (Some(p1), Some(c1)) = (p1, c1) else {
+                    continue;
+                };
+
+                if c0 == c1 || (c0 == p1 && c1 == p0) {
+                    return Err("Two cranes are in the same cell");
+                }
+            }
         }
 
         Ok(())
