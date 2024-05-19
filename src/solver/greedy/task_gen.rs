@@ -15,6 +15,7 @@ pub struct Task {
     container: Container,
     from: Coord,
     to: Coord,
+    is_completed: bool,
     board: Grid<bool>,
 }
 
@@ -31,6 +32,7 @@ impl Task {
             container,
             from,
             to,
+            is_completed: false,
             board,
         }
     }
@@ -49,6 +51,18 @@ impl Task {
 
     pub fn to(&self) -> Coord {
         self.to
+    }
+
+    pub fn is_completed(&self) -> bool {
+        self.is_completed
+    }
+
+    pub fn complete(&mut self) {
+        self.is_completed = true;
+    }
+
+    pub fn board(&self) -> &Grid<bool> {
+        &self.board
     }
 }
 
@@ -116,10 +130,10 @@ pub fn generate_tasks(input: &Input) -> Result<Vec<Task>, &'static str> {
 
             match best_pos {
                 Some(best_pos) => {
-                    board[best_pos] = true;
                     positions[container.index()] = Some(best_pos);
                     let task = Task::new(tasks.len(), container, from, best_pos, board.clone());
                     tasks.push(task);
+                    board[best_pos] = true;
                 }
                 None => {
                     return Err("storage positions are occupied");
