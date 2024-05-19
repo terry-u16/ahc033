@@ -15,6 +15,15 @@ pub fn assign_tasks(yard: &Yard, tasks: &[Task]) -> [Option<Task>; Input::N] {
     let mut containers = [false; Input::CONTAINER_COUNT];
 
     let mut task_count = 0;
+    let available_crane_count = yard
+        .cranes()
+        .iter()
+        .filter(|c| match c {
+            CraneState::Empty(_) => true,
+            CraneState::Holding(_, _) => true,
+            CraneState::Destroyed => false,
+        })
+        .count();
 
     for task in tasks.iter() {
         if task.is_completed() || containers[task.container().index()] {
@@ -36,7 +45,7 @@ pub fn assign_tasks(yard: &Yard, tasks: &[Task]) -> [Option<Task>; Input::N] {
 
         task_count += 1;
 
-        if task_count >= Input::N {
+        if task_count >= available_crane_count {
             break;
         }
     }
