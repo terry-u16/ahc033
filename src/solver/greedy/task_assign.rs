@@ -14,6 +14,8 @@ pub fn assign_tasks(yard: &Yard, tasks: &[Task]) -> [Option<Task>; Input::N] {
     let mut candidates = vec![];
     let mut containers = [false; Input::CONTAINER_COUNT];
 
+    let mut task_count = 0;
+
     for task in tasks.iter() {
         if task.is_completed() || containers[task.container().index()] {
             continue;
@@ -30,10 +32,12 @@ pub fn assign_tasks(yard: &Yard, tasks: &[Task]) -> [Option<Task>; Input::N] {
             containers[task.container().index()] = true;
         } else {
             candidates.push(task.clone());
+        }
 
-            if candidates.len() >= Input::N {
-                break;
-            }
+        task_count += 1;
+
+        if task_count >= Input::N {
+            break;
         }
     }
 

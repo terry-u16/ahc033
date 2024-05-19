@@ -81,7 +81,7 @@ pub enum Operation {
     None,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CraneState {
     Empty(Coord),
     Holding(Container, Coord),

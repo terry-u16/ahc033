@@ -13,13 +13,18 @@ use solver::Solver as _;
 
 fn main() -> Result<(), &'static str> {
     let input = Input::read_input();
-    let solvers: Vec<Box<dyn Solver>> = vec![Box::new(SingleCraneSolver), Box::new(GreedySolver)];
+    //let solvers: Vec<Box<dyn Solver>> = vec![Box::new(SingleCraneSolver), Box::new(GreedySolver)];
+    let solvers: Vec<Box<dyn Solver>> = vec![Box::new(GreedySolver)];
     let mut best_result = None;
     let mut best_score = u32::MAX;
 
     for solver in solvers {
-        let Ok(result) = solver.solve(&input) else {
-            continue;
+        let result = match solver.solve(&input) {
+            Ok(result) => result,
+            Err(err) => {
+                eprintln!("{}", err);
+                continue;
+            }
         };
         let score = result.score();
 
