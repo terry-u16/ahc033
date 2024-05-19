@@ -7,7 +7,7 @@ use crate::{
     grid::{ConstMap2d, Coord, CoordDiff},
 };
 
-pub type Grid<T> = ConstMap2d<T, { Input::N }>;
+pub type Grid<T> = ConstMap2d<T, { Input::N }, { Input::N * Input::N }>;
 
 const SEQUENCE: [usize; Input::CONTAINER_COUNT] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
@@ -41,6 +41,10 @@ impl Input {
         }
 
         Self::new(containers)
+    }
+
+    pub const fn containers(&self) -> &[[Container; Input::N]; Input::N] {
+        &self.containers
     }
 
     pub const fn is_large_crane(crane: usize) -> bool {

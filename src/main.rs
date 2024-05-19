@@ -4,13 +4,33 @@ mod grid;
 mod problem;
 mod solver;
 
-use crate::solver::single_crane::SingleCraneSolver;
+use crate::{
+    common::ChangeMinMax,
+    solver::{greedy::GreedySolver, single_crane::SingleCraneSolver, Solver},
+};
 use problem::Input;
 use solver::Solver as _;
 
 fn main() -> Result<(), &'static str> {
     let input = Input::read_input();
-    let result = SingleCraneSolver.solve(&input)?;
+    let solvers: Vec<Box<dyn Solver>> = vec![Box::new(SingleCraneSolver), Box::new(GreedySolver)];
+    let mut best_result = None;
+    let mut best_score = u32::MAX;
+
+    for solver in solvers {
+        let Ok(result) = solver.solve(&input) else {
+            continue;
+        };
+        let score = result.score();
+
+        if best_score.change_min(score) {
+            best_result = Some(result);
+            best_score = score;
+        }
+    }
+
+    let result = best_result.ok_or("Failed to solve")?;
+
     print!("{}", result.output());
     eprintln!("Score: {}", result.score());
 

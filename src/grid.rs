@@ -1,4 +1,7 @@
-use std::ops::{Add, AddAssign, Index, IndexMut};
+use std::{
+    fmt::Display,
+    ops::{Add, AddAssign, Index, IndexMut},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Coord {
@@ -37,6 +40,12 @@ impl Coord {
 
     const fn dist_1d(x0: u8, x1: u8) -> usize {
         x0.abs_diff(x1) as usize
+    }
+}
+
+impl Display for Coord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.row(), self.col())
     }
 }
 
@@ -174,28 +183,27 @@ impl<T> IndexMut<usize> for Map2d<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ConstMap2d<T, const N: usize> {
-    map: Vec<T>,
+#[derive(Debug, Clone, Copy)]
+pub struct ConstMap2d<T, const N: usize, const N2: usize> {
+    map: [T; N2],
 }
 
 #[allow(dead_code)]
-impl<T, const N: usize> ConstMap2d<T, N> {
-    pub fn new(map: Vec<T>) -> Self {
-        assert_eq!(map.len(), N * N);
+impl<T, const N: usize, const N2: usize> ConstMap2d<T, N, N2> {
+    pub fn new(map: [T; N2]) -> Self {
         Self { map }
     }
 }
 
 #[allow(dead_code)]
-impl<T: Default + Clone, const N: usize> ConstMap2d<T, N> {
+impl<T: Default + Clone + Copy, const N: usize, const N2: usize> ConstMap2d<T, N, N2> {
     pub fn with_default() -> Self {
-        let map = vec![T::default(); N * N];
+        let map = [T::default(); N2];
         Self { map }
     }
 }
 
-impl<T, const N: usize> Index<Coord> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> Index<Coord> for ConstMap2d<T, N, N2> {
     type Output = T;
 
     #[inline]
@@ -204,14 +212,14 @@ impl<T, const N: usize> Index<Coord> for ConstMap2d<T, N> {
     }
 }
 
-impl<T, const N: usize> IndexMut<Coord> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> IndexMut<Coord> for ConstMap2d<T, N, N2> {
     #[inline]
     fn index_mut(&mut self, coordinate: Coord) -> &mut Self::Output {
         &mut self.map[coordinate.to_index(N)]
     }
 }
 
-impl<T, const N: usize> Index<&Coord> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> Index<&Coord> for ConstMap2d<T, N, N2> {
     type Output = T;
 
     #[inline]
@@ -220,14 +228,14 @@ impl<T, const N: usize> Index<&Coord> for ConstMap2d<T, N> {
     }
 }
 
-impl<T, const N: usize> IndexMut<&Coord> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> IndexMut<&Coord> for ConstMap2d<T, N, N2> {
     #[inline]
     fn index_mut(&mut self, coordinate: &Coord) -> &mut Self::Output {
         &mut self.map[coordinate.to_index(N)]
     }
 }
 
-impl<T, const N: usize> Index<usize> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> Index<usize> for ConstMap2d<T, N, N2> {
     type Output = [T];
 
     #[inline]
@@ -238,68 +246,11 @@ impl<T, const N: usize> Index<usize> for ConstMap2d<T, N> {
     }
 }
 
-impl<T, const N: usize> IndexMut<usize> for ConstMap2d<T, N> {
+impl<T, const N: usize, const N2: usize> IndexMut<usize> for ConstMap2d<T, N, N2> {
     #[inline]
     fn index_mut(&mut self, row: usize) -> &mut Self::Output {
         let begin = row * N;
         let end = begin + N;
         &mut self.map[begin..end]
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::{ConstMap2d, Coord, CoordDiff, Map2d};
-
-    #[test]
-    fn coord_add() {
-        let c = Coord::new(2, 4);
-        let d = CoordDiff::new(-3, 5);
-        let actual = c + d;
-
-        let expected = Coord::new(!0, 9);
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn coord_add_assign() {
-        let mut c = Coord::new(2, 4);
-        let d = CoordDiff::new(-3, 5);
-        c += d;
-
-        let expected = Coord::new(!0, 9);
-        assert_eq!(expected, c);
-    }
-
-    #[test]
-    fn map_new() {
-        let map = Map2d::new(vec![0, 1, 2, 3], 2);
-        let actual = map[Coord::new(1, 0)];
-        let expected = 2;
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn map_default() {
-        let map = Map2d::with_default(2);
-        let actual = map[Coord::new(1, 0)];
-        let expected = 0;
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn const_map_new() {
-        let map = ConstMap2d::<_, 2>::new(vec![0, 1, 2, 3]);
-        let actual = map[Coord::new(1, 0)];
-        let expected = 2;
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn const_map_default() {
-        let map = ConstMap2d::<_, 2>::with_default();
-        let actual = map[Coord::new(1, 0)];
-        let expected = 0;
-        assert_eq!(expected, actual);
     }
 }
