@@ -30,6 +30,7 @@ impl Solver for GreedySolver {
         while !yard.is_end() {
             let tasks = task_assign::assign_tasks(&mut yard, &mut all_tasks);
             let operations = task_execute::execute(&mut yard, &tasks);
+            eprintln!("turn: {:>3} | {:?}", output.len(), operations);
 
             for (i, op) in operations.iter().enumerate() {
                 if let Operation::Drop = op {

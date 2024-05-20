@@ -196,6 +196,14 @@ impl<T, const N: usize, const N2: usize> ConstMap2d<T, N, N2> {
 }
 
 #[allow(dead_code)]
+impl<T: Copy, const N: usize, const N2: usize> ConstMap2d<T, N, N2> {
+    pub fn map<U>(&self, f: impl FnMut(T) -> U) -> ConstMap2d<U, N, N2> {
+        let map = self.map.map(f);
+        ConstMap2d::new(map)
+    }
+}
+
+#[allow(dead_code)]
 impl<T: Default + Clone + Copy, const N: usize, const N2: usize> ConstMap2d<T, N, N2> {
     pub fn with_default() -> Self {
         let map = [T::default(); N2];

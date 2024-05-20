@@ -72,13 +72,25 @@ impl Container {
 #[derive(Debug, Clone, Copy)]
 pub enum Operation {
     Up,
+    Right,
     Down,
     Left,
-    Right,
     Pick,
     Drop,
     Destroy,
     None,
+}
+
+impl Operation {
+    pub fn dir(&self) -> CoordDiff {
+        match self {
+            Self::Up => CoordDiff::new(-1, 0),
+            Self::Right => CoordDiff::new(0, 1),
+            Self::Down => CoordDiff::new(1, 0),
+            Self::Left => CoordDiff::new(0, -1),
+            _ => CoordDiff::new(0, 0),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
