@@ -4,6 +4,8 @@ use crate::{
     problem::{Container, Grid, Input},
 };
 use itertools::{iproduct, Itertools};
+use rand::prelude::*;
+use rand::Rng;
 
 const N: usize = Input::N;
 const NP1: usize = N + 1;
@@ -66,7 +68,7 @@ impl Task {
     }
 }
 
-pub fn generate_tasks(input: &Input) -> Result<Vec<Task>, &'static str> {
+pub fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
     let (max_stock, history) = dp(input);
     //eprintln!("max_stock: {}", max_stock);
 
@@ -75,15 +77,13 @@ pub fn generate_tasks(input: &Input) -> Result<Vec<Task>, &'static str> {
         .containers()
         .map(|c| c.iter().copied().rev().collect_vec());
 
-    const STORAGES: [Coord; 6] = [
+    let mut storages = [
         Coord::new(0, 3),
-        Coord::new(1, 3),
-        Coord::new(3, 3),
+        Coord::new(2, 3),
         Coord::new(4, 3),
-        //Coord::new(0, 2),
-        Coord::new(1, 2),
-        Coord::new(3, 2),
-        //Coord::new(4, 2),
+        Coord::new(0, 2),
+        Coord::new(2, 2),
+        Coord::new(4, 2),
     ];
 
     let mut board = Grid::new([false; Input::CONTAINER_COUNT]);
@@ -114,14 +114,14 @@ pub fn generate_tasks(input: &Input) -> Result<Vec<Task>, &'static str> {
             // ベストな場所を探す
             let mut best_pos = None;
             let mut best_cost = usize::MAX;
+            storages.shuffle(rng);
 
-            for &cand in STORAGES.iter() {
+            for &cand in storages.iter() {
                 if board[cand] {
                     continue;
                 }
 
-                // ゴールからの近さをより重視する
-                let cost = from.dist(&cand) + cand.dist(&to) * 10;
+                let cost = from.dist(&cand) + cand.dist(&to);
 
                 if best_cost.change_min(cost) {
                     best_pos = Some(cand);

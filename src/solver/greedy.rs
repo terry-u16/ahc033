@@ -22,8 +22,8 @@ impl GreedySolver {
 
 impl Solver for GreedySolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
-        let mut all_tasks = task_gen::generate_tasks(input)?;
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
+        let mut all_tasks = task_gen::generate_tasks(input, &mut rng)?;
 
         //for s in all_tasks.iter().map(|t| {
         //    format!(
