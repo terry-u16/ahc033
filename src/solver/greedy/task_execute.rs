@@ -171,18 +171,23 @@ fn dfs(
             0
         };
 
+        let score_mul = 1 << (Input::N - depth - 1) as i32;
+
         let old_max_dist = if let Some(goal) = task.as_ref().map(|t| t.to()) {
             let old_max_dist = max_dists[goal];
-            new_score += (max_dists[goal] - dist).max(0) * 100;
+            new_score += (max_dists[goal] - dist).max(0) * 2 * score_mul;
             max_dists[goal].change_max(dist);
             old_max_dist
         } else {
             0
         };
 
-        new_score += dist * (1 << (Input::N - depth - 1)) as i32;
+        new_score += dist * score_mul;
         operations[crane_i] = op;
-        cant_in[next] = true;
+
+        if op != Operation::Destroy {
+            cant_in[next] = true;
+        }
 
         // クロスする移動もNG
         if op_usize < 4 {
