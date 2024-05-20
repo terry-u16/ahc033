@@ -20,7 +20,7 @@ fn main() -> Result<(), &'static str> {
     let mut best_score = best_result.score();
     let mut rng = Pcg64Mcg::from_entropy();
 
-    while since.elapsed().as_secs_f64() < 1.9 {
+    while since.elapsed().as_secs_f64() < 2.9 {
         let solver = GreedySolver::new(rng.gen(), best_score as usize);
         let result = match solver.solve(&input) {
             Ok(result) => result,
