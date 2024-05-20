@@ -68,22 +68,22 @@ impl Task {
 
 pub fn generate_tasks(input: &Input) -> Result<Vec<Task>, &'static str> {
     let (max_stock, history) = dp(input);
-    eprintln!("max_stock: {}", max_stock);
+    //eprintln!("max_stock: {}", max_stock);
 
     let mut tasks = vec![];
     let mut containers = input
         .containers()
         .map(|c| c.iter().copied().rev().collect_vec());
 
-    const STORAGES: [Coord; 8] = [
+    const STORAGES: [Coord; 6] = [
         Coord::new(0, 3),
         Coord::new(1, 3),
         Coord::new(3, 3),
         Coord::new(4, 3),
-        Coord::new(0, 2),
+        //Coord::new(0, 2),
         Coord::new(1, 2),
         Coord::new(3, 2),
-        Coord::new(4, 2),
+        //Coord::new(4, 2),
     ];
 
     let mut board = Grid::new([false; Input::CONTAINER_COUNT]);

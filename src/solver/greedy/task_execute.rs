@@ -1,6 +1,6 @@
-use std::collections::VecDeque;
-
 use itertools::Itertools;
+use rand::prelude::*;
+use std::collections::VecDeque;
 
 use crate::{
     common::ChangeMinMax as _,
@@ -10,7 +10,11 @@ use crate::{
 
 use super::task_gen::Task;
 
-pub fn execute(yard: &Yard, tasks: &[Option<Task>; Input::N]) -> [Operation; Input::N] {
+pub fn execute(
+    yard: &Yard,
+    tasks: &[Option<Task>; Input::N],
+    rng: &mut impl Rng,
+) -> [Operation; Input::N] {
     let mut operations = [
         Operation::None,
         Operation::None,
@@ -72,6 +76,8 @@ pub fn execute(yard: &Yard, tasks: &[Option<Task>; Input::N]) -> [Operation; Inp
             }
             (Some(_), CraneState::Destroyed) => unreachable!("Destroyed crane shold not be here"),
         }
+
+        candidates.shuffle(rng);
     }
 
     let mut best_operations = operations.clone();
@@ -116,7 +122,7 @@ fn dfs(
     score: i32,
     best_score: &mut i32,
 ) {
-    if depth == candidates.len() {
+    if depth == crane_order.len() {
         if best_score.change_min(score) {
             *best_operations = *operations;
         }
