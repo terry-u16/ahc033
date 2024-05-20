@@ -50,7 +50,16 @@ pub fn execute(
             (None, CraneState::Destroyed) => unreachable!("Destroyed crane shold not be here"),
             (Some(task), CraneState::Empty(coord)) => {
                 if task.from() == coord {
-                    candidates.push(Operation::Pick);
+                    if yard.grid()[coord] == Some(task.container()) {
+                        candidates.push(Operation::Pick);
+                    } else {
+                        for &op in moves[1..].iter() {
+                            let next = coord + op.dir();
+                            if next.in_map(Input::N) {
+                                candidates.push(op);
+                            }
+                        }
+                    }
                 } else {
                     for &op in moves.iter() {
                         let next = coord + op.dir();
