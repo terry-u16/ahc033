@@ -154,7 +154,7 @@ fn dfs(
         let next = coord + op.dir();
         let op_usize = op as usize;
 
-        if cant_in[next] || cant_move[coord][op_usize] {
+        if (cant_in[next] && op != Operation::Destroy) || cant_move[coord][op_usize] {
             continue;
         }
 
@@ -211,7 +211,9 @@ fn dfs(
             best_score,
         );
 
-        cant_in[next] = false;
+        if op != Operation::Destroy {
+            cant_in[next] = false;
+        }
 
         if op_usize < 4 {
             cant_move[next][op_usize ^ 2] = false;
