@@ -1,9 +1,12 @@
+use std::vec;
+
 use crate::{
     common::ChangeMinMax as _,
     grid::Coord,
     problem::{Container, Grid, Input},
 };
 use itertools::{iproduct, Itertools};
+use once_cell::sync::Lazy;
 use rand::prelude::*;
 use rand::Rng;
 
@@ -68,7 +71,217 @@ impl Task {
     }
 }
 
+const KAPPA: f64 = 1.0;
+
+#[derive(Debug, Clone)]
+struct State {
+    temporary: [bool; Input::CONTAINER_COUNT],
+}
+
+impl State {
+    fn new() -> Self {
+        Self {
+            temporary: [true; Input::CONTAINER_COUNT],
+        }
+    }
+
+    fn calc_score(&self, input: &Input) -> Result<f64, ()> {
+        const CONT: usize = Input::CONTAINER_COUNT;
+
+        // [搬入口積み * 25, 一時下ろし * 25, 一時積み * 25, 搬出口下ろし * 25, START]
+        let mut graph = vec![vec![]; CONT * 4 + 1];
+
+        // 積み→下ろし
+        for row in 0..Input::N {
+            let from = Coord::new(row, 0);
+
+            for i in 0..Input::N {
+                let container = input.containers()[row][i].index();
+                let goal = Input::get_goal(Container::new(container));
+
+                if self.temporary[container] {
+                    // 一時保管あり
+                    const TEMP_COL: usize = 3;
+                    let temp = Coord::new(goal.row(), TEMP_COL);
+                    graph[container + CONT].push((container, from.dist(&temp) + 2));
+                    graph[container + CONT * 2].push((container + CONT * 1, 0));
+                    graph[container + CONT * 3].push((container + CONT * 2, temp.dist(&goal) + 2));
+                } else {
+                    // 一時保管なし
+                    graph[container + CONT * 3].push((container, from.dist(&goal) + 2));
+                }
+            }
+        }
+
+        // 積み → 積み
+        for row in 0..Input::N {
+            for i in 0..Input::N - 1 {
+                let container0 = input.containers()[row][i].index();
+                let container1 = input.containers()[row][i + 1].index();
+                graph[container1].push((container0, 2));
+            }
+        }
+
+        // 下ろし → 下ろし
+        for i in 0..Input::N {
+            for i in i * Input::N..(i + 1) * Input::N - 1 {
+                let container0 = i;
+                let container1 = i + 1;
+                graph[container1 + CONT * 3].push((container0 + CONT * 3, 2));
+            }
+        }
+
+        // start
+        for row in 0..Input::N {
+            let container = input.containers()[row][0].index();
+            graph[container].push((CONT * 4, 0));
+        }
+
+        let mut inv_graph = vec![vec![]; CONT * 4 + 1];
+
+        for (v, edges) in graph.iter().enumerate() {
+            for &(u, cost) in edges.iter() {
+                inv_graph[u].push((v, cost));
+            }
+        }
+
+        let exp_table = EXP_TABLE.as_slice();
+        let mut dp = vec![0.0; CONT * 4 + 1];
+        let mut stack = Vec::new();
+        let mut indegrees = vec![0; CONT * 4 + 1];
+
+        for edge in graph.iter() {
+            for &(v, _) in edge.iter() {
+                indegrees[v] += 1;
+            }
+        }
+
+        for v in 0..CONT * 4 + 1 {
+            if indegrees[v] == 0 {
+                for &(u, cost) in graph[v].iter() {
+                    indegrees[u] -= 1;
+
+                    if indegrees[u] == 0 {
+                        stack.push(u);
+                    }
+                }
+            }
+        }
+
+        while let Some(v) = stack.pop() {
+            let mut sum = 0.0;
+
+            for &(u, cost) in inv_graph[v].iter() {
+                sum += ((dp[u] + cost as f64) / KAPPA).exp();
+            }
+
+            for &(u, _) in graph[v].iter() {
+                indegrees[u] -= 1;
+                if indegrees[u] == 0 {
+                    stack.push(u);
+                }
+            }
+
+            dp[v] = KAPPA * sum.ln();
+        }
+
+        if indegrees.iter().any(|&x| x != 0) {
+            Err(())
+        } else {
+            let logsumexp = dp[CONT * 4];
+            Ok(logsumexp)
+        }
+    }
+}
+
+static EXP_TABLE: Lazy<Vec<f64>> = Lazy::new(|| {
+    let mut table = vec![];
+
+    for i in 0..=1000 {
+        table.push((i as f64 / KAPPA).exp());
+    }
+
+    table
+});
+
+fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
+    let mut solution = initial_solution;
+    let mut best_solution = solution.clone();
+    let mut current_score = solution.calc_score(input).unwrap();
+    let mut best_score = current_score;
+    let init_score = current_score;
+
+    let mut all_iter = 0;
+    let mut valid_iter = 0;
+    let mut accepted_count = 0;
+    let mut update_count = 0;
+    let mut rng = rand_pcg::Pcg64Mcg::new(42);
+
+    let duration_inv = 1.0 / duration;
+    let since = std::time::Instant::now();
+
+    let temp0 = 1e1;
+    let temp1 = 1e-1;
+    let mut inv_temp = 1.0 / temp0;
+
+    loop {
+        all_iter += 1;
+        if (all_iter & ((1 << 4) - 1)) == 0 {
+            let time = (std::time::Instant::now() - since).as_secs_f64() * duration_inv;
+            let temp = f64::powf(temp0, 1.0 - time) * f64::powf(temp1, time);
+            inv_temp = 1.0 / temp;
+
+            if time >= 1.0 {
+                break;
+            }
+        }
+
+        // 変形
+        let index = rng.gen_range(0..Input::CONTAINER_COUNT);
+        solution.temporary[index] ^= true;
+
+        // スコア計算
+        let Ok(new_score) = solution.calc_score(input) else {
+            solution.temporary[index] ^= true;
+            continue;
+        };
+        let score_diff = new_score - current_score;
+
+        if score_diff <= 0.0 || rng.gen_bool(f64::exp(-score_diff as f64 * inv_temp)) {
+            // 解の更新
+            current_score = new_score;
+            accepted_count += 1;
+
+            if best_score.change_min(current_score) {
+                best_solution = solution.clone();
+                update_count += 1;
+            }
+        } else {
+            solution.temporary[index] ^= true;
+        }
+
+        valid_iter += 1;
+    }
+
+    eprintln!("===== annealing =====");
+    eprintln!("init score : {}", init_score);
+    eprintln!("score      : {}", best_score);
+    eprintln!("all iter   : {}", all_iter);
+    eprintln!("valid iter : {}", valid_iter);
+    eprintln!("accepted   : {}", accepted_count);
+    eprintln!("updated    : {}", update_count);
+    eprintln!("");
+
+    best_solution
+}
+
 pub fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
+    let state = State::new();
+    let state = annealing(input, state, 1.0);
+    eprintln!("state: {:?}", state);
+
+    panic!();
+
     let (max_stock, history) = dp(input);
     //eprintln!("max_stock: {}", max_stock);
 
