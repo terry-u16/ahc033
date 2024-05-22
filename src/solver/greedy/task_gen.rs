@@ -1,5 +1,3 @@
-use std::vec;
-
 use crate::{
     common::ChangeMinMax as _,
     grid::Coord,
@@ -71,7 +69,7 @@ impl Task {
     }
 }
 
-const KAPPA: f64 = 1.0;
+const KAPPA: f64 = 10.0;
 
 #[derive(Debug, Clone)]
 struct State {
@@ -137,16 +135,9 @@ impl State {
             graph[container].push((CONT * 4, 0));
         }
 
-        let mut inv_graph = vec![vec![]; CONT * 4 + 1];
-
-        for (v, edges) in graph.iter().enumerate() {
-            for &(u, cost) in edges.iter() {
-                inv_graph[u].push((v, cost));
-            }
-        }
-
         let exp_table = EXP_TABLE.as_slice();
-        let mut dp = vec![0.0; CONT * 4 + 1];
+        let mut dp = vec![EXP_TABLE[0]; CONT * 4 + 1];
+        let mut counts = vec![0.0; CONT * 4 + 1];
         let mut stack = Vec::new();
         let mut indegrees = vec![0; CONT * 4 + 1];
 
@@ -156,39 +147,29 @@ impl State {
             }
         }
 
-        for v in 0..CONT * 4 + 1 {
-            if indegrees[v] == 0 {
-                for &(u, cost) in graph[v].iter() {
-                    indegrees[u] -= 1;
-
-                    if indegrees[u] == 0 {
-                        stack.push(u);
-                    }
-                }
+        for (v, &indegree) in indegrees.iter().enumerate() {
+            if indegree == 0 {
+                stack.push(v);
+                counts[v] = 1.0;
             }
         }
 
         while let Some(v) = stack.pop() {
-            let mut sum = 0.0;
+            for &(u, cost) in graph[v].iter() {
+                // 配るDP
+                dp[u] += dp[v] * exp_table[cost];
 
-            for &(u, cost) in inv_graph[v].iter() {
-                sum += ((dp[u] + cost as f64) / KAPPA).exp();
-            }
-
-            for &(u, _) in graph[v].iter() {
                 indegrees[u] -= 1;
                 if indegrees[u] == 0 {
                     stack.push(u);
                 }
             }
-
-            dp[v] = KAPPA * sum.ln();
         }
 
         if indegrees.iter().any(|&x| x != 0) {
             Err(())
         } else {
-            let logsumexp = dp[CONT * 4];
+            let logsumexp = dp[CONT * 4].ln() * KAPPA;
             Ok(logsumexp)
         }
     }
