@@ -268,7 +268,7 @@ impl State {
     }
 
     fn calc_score(&self, input: &Input) -> f64 {
-        const KAPPA: f64 = 3.0;
+        const KAPPA: f64 = 5.0;
         let mut turns = TurnRecorder::new();
         self.simulate(input, &mut turns);
 
@@ -282,6 +282,12 @@ impl State {
             * KAPPA;
 
         result
+    }
+
+    fn max_turn(&self, input: &Input) -> i32 {
+        let mut turns = TurnRecorder::new();
+        self.simulate(input, &mut turns);
+        *turns.last_turns.iter().max().unwrap()
     }
 }
 
@@ -314,24 +320,38 @@ impl Recorder for TurnRecorder {
     }
 }
 
+struct DisplayRecorder;
+
+impl Recorder for DisplayRecorder {
+    fn record(&mut self, _crane: usize, _turn: i32, carry: Carry) {
+        match carry {
+            Carry::Direct(container, _, _) => eprintln!("direct: {}", container.index()),
+            Carry::ToTemporary(container, _, _) => eprintln!("to_temp: {}", container.index()),
+            Carry::FromTemporary(container, _, _, _) => {
+                eprintln!("from_temp: {}", container.index())
+            }
+        }
+    }
+}
+
 fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
     let mut solution = initial_solution;
     let mut best_solution = solution.clone();
     let mut current_score = solution.calc_score(input);
-    let mut best_score = current_score;
-    let init_score = current_score;
+    let mut best_score = solution.max_turn(input);
+    let init_score = solution.max_turn(input);
 
     let mut all_iter = 0;
     let mut valid_iter = 0;
     let mut accepted_count = 0;
     let mut update_count = 0;
-    let mut rng = rand_pcg::Pcg64Mcg::new(42);
+    let mut rng = rand_pcg::Pcg64Mcg::from_entropy();
 
     let duration_inv = 1.0 / duration;
     let since = std::time::Instant::now();
 
-    let temp0 = 1e1;
-    let temp1 = 1e-2;
+    let temp0 = 2e0;
+    let temp1 = 1e-1;
     let mut inv_temp = 1.0 / temp0;
 
     loop {
@@ -358,7 +378,7 @@ fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
             current_score = new_score;
             accepted_count += 1;
 
-            if best_score.change_min(current_score) {
+            if best_score.change_min(solution.max_turn(input)) {
                 best_solution = solution.clone();
                 update_count += 1;
             }
@@ -384,6 +404,14 @@ fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
 pub fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
     let state = State::init();
     let state = annealing(input, state, 1.0);
+
+    let mut display = DisplayRecorder;
+    state.simulate(input, &mut display);
+
+    let mut turn = TurnRecorder::new();
+    state.simulate(input, &mut turn);
+    eprintln!("{}", turn.last_turns.iter().max().unwrap());
+
     panic!();
 
     let (max_stock, history) = dp(input);
