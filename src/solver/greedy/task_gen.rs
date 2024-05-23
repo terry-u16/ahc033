@@ -194,7 +194,7 @@ impl State {
         }
 
         let exp_table = EXP_TABLE.as_slice();
-        let mut dp = vec![EXP_TABLE[0]; CONT * 4 + 1];
+        let mut dp = vec![0.0; CONT * 4 + 1];
         let mut stack = Vec::new();
         let mut indegrees = vec![0; CONT * 4 + 1];
 
