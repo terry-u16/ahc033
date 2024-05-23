@@ -69,7 +69,7 @@ impl Task {
     }
 }
 
-const KAPPA: f64 = 10.0;
+const KAPPA: f64 = 5.0;
 
 #[derive(Debug, Clone)]
 struct State {
@@ -83,7 +83,65 @@ impl State {
         }
     }
 
-    fn calc_score(&self, input: &Input) -> Result<f64, ()> {
+    fn calc_score(&self, input: &Input) -> f64 {
+        const CONT: usize = Input::CONTAINER_COUNT;
+
+        let dp = self.simulate(input);
+        let mut waiting = 0.0;
+
+        for i in 0..CONT {
+            if !self.temporary[i] {
+                let mut row = 0;
+
+                for r in 0..Input::N {
+                    if input.containers()[r].contains(&Container::new(i)) {
+                        row = r;
+                        break;
+                    }
+                }
+
+                let d = dp[i].ln() * KAPPA - dp[i + CONT * 3].ln() * KAPPA;
+                let q = Coord::new(row, 0).dist(&Input::get_goal(Container::new(i))) + 2;
+                waiting += d - q as f64;
+            }
+        }
+
+        let logsumexp = (dp[CONT * 4] + (waiting / (Input::N as f64 * KAPPA)).exp()).ln() * KAPPA;
+        logsumexp
+    }
+
+    fn to_tasks(&self, input: &Input) {
+        let dp = self.simulate(input);
+
+        let mut tasks = vec![];
+
+        for i in 0..Input::CONTAINER_COUNT {
+            if self.temporary[i] {
+                tasks.push(i);
+                tasks.push(i + Input::CONTAINER_COUNT * 2);
+            } else {
+                tasks.push(i);
+            }
+        }
+
+        tasks.sort_by(|&a, &b| dp[a].partial_cmp(&dp[b]).unwrap().reverse());
+
+        for &i in tasks.iter() {
+            let j = i % Input::CONTAINER_COUNT;
+
+            if self.temporary[j] {
+                if i < Input::CONTAINER_COUNT {
+                    eprintln!("to temporary: {} {:.2}", j, dp[i].ln() * KAPPA);
+                } else {
+                    eprintln!("from temporary: {} {:.2}", j, dp[i].ln() * KAPPA);
+                }
+            } else {
+                eprintln!("direct: {} {:.2}", j, dp[i].ln() * KAPPA);
+            }
+        }
+    }
+
+    fn simulate(&self, input: &Input) -> Vec<f64> {
         const CONT: usize = Input::CONTAINER_COUNT;
 
         // [搬入口積み * 25, 一時下ろし * 25, 一時積み * 25, 搬出口下ろし * 25, START]
@@ -137,7 +195,6 @@ impl State {
 
         let exp_table = EXP_TABLE.as_slice();
         let mut dp = vec![EXP_TABLE[0]; CONT * 4 + 1];
-        let mut counts = vec![0.0; CONT * 4 + 1];
         let mut stack = Vec::new();
         let mut indegrees = vec![0; CONT * 4 + 1];
 
@@ -150,7 +207,6 @@ impl State {
         for (v, &indegree) in indegrees.iter().enumerate() {
             if indegree == 0 {
                 stack.push(v);
-                counts[v] = 1.0;
             }
         }
 
@@ -166,12 +222,9 @@ impl State {
             }
         }
 
-        if indegrees.iter().any(|&x| x != 0) {
-            Err(())
-        } else {
-            let logsumexp = dp[CONT * 4].ln() * KAPPA;
-            Ok(logsumexp)
-        }
+        assert!(indegrees.iter().all(|&x| x == 0));
+
+        dp
     }
 }
 
@@ -188,7 +241,7 @@ static EXP_TABLE: Lazy<Vec<f64>> = Lazy::new(|| {
 fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
     let mut solution = initial_solution;
     let mut best_solution = solution.clone();
-    let mut current_score = solution.calc_score(input).unwrap();
+    let mut current_score = solution.calc_score(input);
     let mut best_score = current_score;
     let init_score = current_score;
 
@@ -222,10 +275,7 @@ fn annealing(input: &Input, initial_solution: State, duration: f64) -> State {
         solution.temporary[index] ^= true;
 
         // スコア計算
-        let Ok(new_score) = solution.calc_score(input) else {
-            solution.temporary[index] ^= true;
-            continue;
-        };
+        let new_score = solution.calc_score(input);
         let score_diff = new_score - current_score;
 
         if score_diff <= 0.0 || rng.gen_bool(f64::exp(-score_diff as f64 * inv_temp)) {
@@ -260,6 +310,8 @@ pub fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'
     let state = State::new();
     let state = annealing(input, state, 1.0);
     eprintln!("state: {:?}", state);
+
+    state.to_tasks(input);
 
     panic!();
 
