@@ -213,7 +213,7 @@ impl State {
         while let Some(v) = stack.pop() {
             for &(u, cost) in graph[v].iter() {
                 // 配るDP
-                dp[u] += dp[v] + exp_table[cost];
+                dp[u] += dp[v] * exp_table[cost];
 
                 indegrees[u] -= 1;
                 if indegrees[u] == 0 {
