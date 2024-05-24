@@ -12,8 +12,20 @@ use super::task_gen::Task;
 
 pub fn order_tasks(input: &Input, tasks: &[Task]) -> Result<(), &'static str> {
     let env = Env::new(&input);
-    let state = State::new(tasks);
+    let state1 = State::new(tasks, |_| 0);
+    let state2 = State::new(tasks, |i| i % Input::N);
+
+    let state = if state1.calc_score(&env, 1000).unwrap_or(f64::MAX)
+        < state2.calc_score(&env, 1000).unwrap_or(f64::MAX)
+    {
+        state1
+    } else {
+        state2
+    };
+
+    let since = std::time::Instant::now();
     let result = state.simulate(&env, 200)?;
+    eprintln!("elapsed: {:?}", since.elapsed());
     eprintln!("{:?}", result);
     eprintln!("{}", result.calc_score());
 
@@ -41,7 +53,8 @@ impl<'a> Env<'a> {
 
 #[derive(Debug, Clone)]
 struct DistDict {
-    dists: Vec<Grid<Grid<usize>>>,
+    dists: [Vec<Grid<Grid<usize>>>; 2],
+    next: [Vec<Grid<Grid<Coord>>>; 2],
 }
 
 impl DistDict {
@@ -60,7 +73,8 @@ impl DistDict {
     ];
 
     fn new() -> Self {
-        let mut dists = vec![];
+        let mut dists_with_container = vec![];
+        let mut next_with_container = vec![];
 
         for flag in 0..1 << Self::STORAGES.len() {
             let mut board = Grid::new([false; Input::N * Input::N]);
@@ -73,21 +87,34 @@ impl DistDict {
 
             let mut d =
                 Grid::new([Grid::new([usize::MAX; Input::N * Input::N]); Input::N * Input::N]);
+            let mut next = Grid::new(
+                [Grid::new([Coord::new(0, 0); Input::N * Input::N]); Input::N * Input::N],
+            );
 
             for row in 0..Input::N {
                 for col in 0..Input::N {
                     let c = Coord::new(row, col);
-                    Self::bfs(&board, &mut d[c], c);
+                    Self::bfs(&board, &mut d[c], &mut next[c], c);
                 }
             }
 
-            dists.push(d);
+            dists_with_container.push(d);
+            next_with_container.push(next);
         }
 
-        Self { dists }
+        // コンテナなし = flagが0
+        let dists_without_container =
+            vec![dists_with_container[0].clone(); dists_with_container.len()];
+        let next_without_container =
+            vec![next_with_container[0].clone(); next_with_container.len()];
+
+        Self {
+            dists: [dists_without_container, dists_with_container],
+            next: [next_without_container, next_with_container],
+        }
     }
 
-    fn bfs(board: &Grid<bool>, dists: &mut Grid<usize>, from: Coord) {
+    fn bfs(board: &Grid<bool>, dists: &mut Grid<usize>, next: &mut Grid<Coord>, from: Coord) {
         dists[from] = 0;
         let mut queue = VecDeque::new();
         queue.push_back(from);
@@ -101,6 +128,32 @@ impl DistDict {
                 if next.in_map(Input::N) && !board[next] && dists[next].change_min(next_dist) {
                     queue.push_back(next);
                 }
+            }
+        }
+
+        const ADJ: [CoordDiff; 5] = [
+            CoordDiff::new(0, 1),
+            CoordDiff::new(1, 0),
+            CoordDiff::new(0, -1),
+            CoordDiff::new(-1, 0),
+            CoordDiff::new(0, 0),
+        ];
+
+        for row in 0..Input::N {
+            for col in 0..Input::N {
+                let c = Coord::new(row, col);
+                let mut best = c;
+                let mut best_dist = dists[best];
+
+                for &adj in ADJ.iter() {
+                    let next = c + adj;
+
+                    if next.in_map(Input::N) && best_dist.change_min(dists[next]) {
+                        best = next;
+                    }
+                }
+
+                next[c] = best;
             }
         }
     }
@@ -118,11 +171,12 @@ impl DistDict {
     }
 
     fn dist(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> usize {
-        if !consider_contianer {
-            return from.dist(&to);
-        }
+        // [to][from]の順になることに注意
+        self.dists[consider_contianer as usize][flag.0][to][from]
+    }
 
-        self.dists[flag.0][from][to]
+    fn next(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> Coord {
+        self.next[consider_contianer as usize][flag.0][to][from]
     }
 }
 
@@ -135,7 +189,7 @@ struct State {
 }
 
 impl State {
-    fn new(tasks: &[Task]) -> Self {
+    fn new(tasks: &[Task], assign_fn: impl Fn(usize) -> usize) -> Self {
         let all_tasks = tasks
             .iter()
             .map(|t| {
@@ -154,10 +208,15 @@ impl State {
         let mut tasks = [vec![], vec![], vec![], vec![], vec![]];
 
         for (i, &task) in all_tasks.iter().enumerate() {
-            tasks[i % 5].push(task);
+            tasks[assign_fn(i)].push(task);
         }
 
         Self { tasks }
+    }
+
+    fn calc_score(&self, env: &Env, max_turn: usize) -> Result<f64, &'static str> {
+        let turns = self.simulate(env, max_turn)?;
+        Ok(turns.calc_score())
     }
 
     fn simulate(&self, env: &Env, max_turn: usize) -> Result<Turns, &'static str> {
@@ -171,35 +230,6 @@ impl State {
 
         for row in 0..Input::N {
             yard[Coord::new(row, 0)] = Some(env.input.containers()[row][0]);
-        }
-
-        fn get_best_move(coord: Coord, dist: impl Fn(Coord) -> Option<usize>) -> Coord {
-            const ADJ: [CoordDiff; 5] = [
-                CoordDiff::new(0, 1),
-                CoordDiff::new(1, 0),
-                CoordDiff::new(0, -1),
-                CoordDiff::new(-1, 0),
-                CoordDiff::new(0, 0),
-            ];
-
-            let mut best = coord;
-            let mut best_dist = usize::MAX;
-
-            for &adj in ADJ.iter() {
-                let next = coord + adj;
-
-                if !next.in_map(Input::N) {
-                    continue;
-                }
-
-                if let Some(d) = dist(next) {
-                    if best_dist.change_min(d) {
-                        best = next;
-                    }
-                }
-            }
-
-            best
         }
 
         for turn in 1.. {
@@ -228,7 +258,7 @@ impl State {
                         if coord == from && can_pick {
                             // コンテナをPickする
                             *crane = CraneState::Holding(container, from);
-                            avail_turns[from] = turn + 1;
+                            avail_turns[from] = turn + 2;
 
                             if let TaskType::FromTemporary(_, _, _) = task {
                                 yard[from] = None;
@@ -240,13 +270,7 @@ impl State {
                             }
                         } else {
                             // コンテナに向けて移動
-                            let next = get_best_move(coord, |c| {
-                                if c != from || can_pick {
-                                    Some(env.dist_dict.dist(flag, c, from, false))
-                                } else {
-                                    None
-                                }
-                            });
+                            let next = env.dist_dict.next(flag, coord, from, false);
                             *crane = CraneState::Empty(next);
                         }
                     }
@@ -267,7 +291,7 @@ impl State {
                         if coord == to && can_drop {
                             // コンテナをDropする
                             *crane = CraneState::Empty(coord);
-                            avail_turns[to] = turn + 1;
+                            avail_turns[to] = turn + 2;
                             task_ptr[crane_i] += 1;
                             last_turns[crane_i] = turn;
 
@@ -279,13 +303,7 @@ impl State {
                         } else {
                             // コンテナに向けて移動
                             let consider_container = !Input::is_large_crane(crane_i);
-                            let next = get_best_move(coord, |c| {
-                                if c != to || can_drop {
-                                    Some(env.dist_dict.dist(flag, c, to, consider_container))
-                                } else {
-                                    None
-                                }
-                            });
+                            let next = env.dist_dict.next(flag, coord, to, consider_container);
                             *crane = CraneState::Holding(container, next);
                         }
                     }
