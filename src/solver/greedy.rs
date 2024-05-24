@@ -8,6 +8,7 @@ use super::{Solver, SolverResult};
 mod task_assign;
 mod task_execute;
 mod task_gen;
+mod task_order;
 
 pub struct GreedySolver {
     seed: u64,
@@ -39,6 +40,7 @@ impl Solver for GreedySolver {
 
         let mut yard = Yard::new(&input);
         let mut output = Output::new();
+        task_order::order_tasks(input, &all_tasks);
 
         while !yard.is_end() {
             let tasks = task_assign::assign_tasks(&mut yard, &mut all_tasks);

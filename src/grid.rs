@@ -1,9 +1,9 @@
 use std::{
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::{Add, AddAssign, Index, IndexMut},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Coord {
     row: u8,
     col: u8,
@@ -44,6 +44,12 @@ impl Coord {
 }
 
 impl Display for Coord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.row(), self.col())
+    }
+}
+
+impl Debug for Coord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.row(), self.col())
     }
