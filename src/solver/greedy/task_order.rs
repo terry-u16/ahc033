@@ -31,6 +31,7 @@ pub fn order_tasks(input: &Input, tasks: &[Task]) -> Result<(), &'static str> {
 
     todo!();
 }
+
 #[derive(Debug, Clone, Copy)]
 enum TaskType {
     Direct(Container, Coord, Coord),
@@ -227,6 +228,7 @@ impl State {
         let mut yard = Grid::new([None; Input::N * Input::N]);
         let mut avail_turns = Grid::new([0; Input::N * Input::N]);
         let mut last_turns = [0; Input::N];
+        let mut no_progress = 0;
 
         for row in 0..Input::N {
             yard[Coord::new(row, 0)] = Some(env.input.containers()[row][0]);
@@ -237,6 +239,7 @@ impl State {
                 return Err("turn limit exceeded");
             }
 
+            let prev_state = cranes.clone();
             let flag = env.dist_dict.get_flag(|c| yard[c].is_some());
 
             for crane_i in 0..Input::N {
@@ -317,6 +320,18 @@ impl State {
                 .all(|(&ptr, tasks)| ptr == tasks.len())
             {
                 return Ok(Turns::new(last_turns));
+            }
+
+            if prev_state == cranes {
+                no_progress += 1;
+
+                // available_turn制約により1ターンは状況が変化しない可能性がある
+                // 2ターン以上状況が変化しない場合は終了
+                if no_progress >= 2 {
+                    return Err("no progress");
+                }
+            } else {
+                no_progress = 0;
             }
         }
 
