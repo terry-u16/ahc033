@@ -91,7 +91,7 @@ struct Precalc {
 }
 
 impl Precalc {
-    const KAPPA: f64 = 0.2;
+    const KAPPA: f64 = 1.0;
 
     fn new() -> Self {
         let exp_table = array::from_fn(|i| (i as f64 / Self::KAPPA).exp());

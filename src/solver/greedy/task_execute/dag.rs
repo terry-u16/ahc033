@@ -26,16 +26,19 @@ const DEPOTS: [Coord; 16] = [
 ];
 
 pub fn critical_path_analysis(tasks: &[Vec<SubTask>; Input::N], precalc: &Precalc) -> TaskSet {
-    let mut init_ptr = [0; Input::N];
-
-    for (i, t) in tasks.iter().take(Input::N - 1).enumerate() {
-        init_ptr[i + 1] = init_ptr[i] + t.len();
-    }
-
     let all_tasks = tasks.iter().flatten().copied().collect_vec();
     let cranes = (0..Input::N)
         .flat_map(|i| repeat(i).take(tasks[i].len()).collect_vec())
         .collect_vec();
+    let mut init_ptr = [0; Input::N];
+    let mut end_ptr = [0; Input::N];
+
+    for (i, t) in tasks.iter().take(Input::N - 1).enumerate() {
+        init_ptr[i + 1] = init_ptr[i] + t.len() as u8;
+        end_ptr[i] = init_ptr[i + 1] as u8;
+    }
+
+    end_ptr[Input::N - 1] = all_tasks.len() as u8;
 
     let mut grid = HashMap::new();
 
@@ -114,22 +117,29 @@ pub fn critical_path_analysis(tasks: &[Vec<SubTask>; Input::N], precalc: &Precal
 
     assert!(indegrees.iter().all(|&x| x == 0));
 
-    TaskSet::new(all_tasks, dp, init_ptr)
+    TaskSet::new(all_tasks, dp, init_ptr, end_ptr)
 }
 
 #[derive(Debug, Clone)]
 pub struct TaskSet {
     pub tasks: Vec<SubTask>,
     pub dp: Vec<f64>,
-    pub init_ptr: [usize; Input::N],
+    pub init_ptr: [u8; Input::N],
+    pub end_ptr: [u8; Input::N],
 }
 
 impl TaskSet {
-    pub fn new(tasks: Vec<SubTask>, dp: Vec<f64>, init_ptr: [usize; Input::N]) -> Self {
+    pub fn new(
+        tasks: Vec<SubTask>,
+        dp: Vec<f64>,
+        init_ptr: [u8; Input::N],
+        end_ptr: [u8; Input::N],
+    ) -> Self {
         Self {
             tasks,
             dp,
             init_ptr,
+            end_ptr,
         }
     }
 }
