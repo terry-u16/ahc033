@@ -119,7 +119,7 @@ impl State {
         storage_flag: StorageFlag,
         history: HistoryIndex,
     ) -> Self {
-        let mut score = 0.0;
+        let mut scores = [0.0; Input::N];
 
         for (i, &task_ptr) in task_ptr.iter().enumerate() {
             let crane = cranes[i];
@@ -134,7 +134,45 @@ impl State {
                 0
             };
 
-            score += env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
+            scores[i] = env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
+        }
+
+        let mut score = scores.iter().sum();
+
+        for i in 0..Input::N {
+            let Some(coord0) = env.tasks.tasks[task_ptr[i] as usize].coord() else {
+                continue;
+            };
+
+            for j in 0..Input::N {
+                if i == j {
+                    continue;
+                }
+
+                let Some(coord1) = env.tasks.tasks[task_ptr[j] as usize].coord() else {
+                    continue;
+                };
+
+                if coord0 == coord1 {
+                    let index0 = env.tasks.tasks[task_ptr[i] as usize].index().unwrap();
+                    let index1 = env.tasks.tasks[task_ptr[j] as usize].index().unwrap();
+                    let d0 = env.precalc.dist_dict.dist(
+                        storage_flag,
+                        cranes[i].coord().unwrap(),
+                        coord0,
+                        false,
+                    );
+                    let d1 = env.precalc.dist_dict.dist(
+                        storage_flag,
+                        cranes[j].coord().unwrap(),
+                        coord1,
+                        false,
+                    );
+
+                    score +=
+                        1e10 * index1.saturating_sub(index0) as f64 * d0.saturating_sub(d1) as f64;
+                }
+            }
         }
 
         Self {
@@ -252,8 +290,27 @@ impl State {
 
         let crane_i = depth;
         let crane = self.cranes[crane_i];
+        let task = env.tasks.tasks[self.task_ptr[crane_i] as usize];
 
         for &op in candidates[depth].iter() {
+            if crane == CraneState::Destroyed {
+                operations[crane_i] = Operation::None;
+
+                self.dfs(
+                    env,
+                    candidates,
+                    cant_in,
+                    cant_move,
+                    history,
+                    operations,
+                    beam,
+                    storage_flag,
+                    depth + 1,
+                );
+
+                continue;
+            }
+
             let coord = crane.coord().unwrap();
             let next = coord + op.dir();
             let op_usize = op as usize;
@@ -276,14 +333,18 @@ impl State {
             self.board[coord] += board_change;
             self.grid_ptr[coord] = self.grid_ptr[coord].wrapping_add_signed(task_ptr_diff);
             self.task_ptr[crane_i] = self.task_ptr[crane_i].wrapping_add_signed(task_ptr_diff);
-            self.cranes[crane_i] = match op {
-                Operation::Pick => CraneState::Holding(Container::new(!0), coord),
-                Operation::Drop => CraneState::Empty(coord),
-                _ => match current_crane {
-                    CraneState::Empty(_) => CraneState::Empty(next),
-                    CraneState::Holding(container, _) => CraneState::Holding(container, next),
-                    CraneState::Destroyed => CraneState::Destroyed,
-                },
+            self.cranes[crane_i] = if task == SubTask::EndOfOrder {
+                CraneState::Destroyed
+            } else {
+                match op {
+                    Operation::Pick => CraneState::Holding(Container::new(!0), coord),
+                    Operation::Drop => CraneState::Empty(coord),
+                    _ => match current_crane {
+                        CraneState::Empty(_) => CraneState::Empty(next),
+                        CraneState::Holding(container, _) => CraneState::Holding(container, next),
+                        CraneState::Destroyed => CraneState::Destroyed,
+                    },
+                }
             };
 
             operations[crane_i] = op;
