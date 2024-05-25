@@ -24,22 +24,33 @@ pub fn execute(
     let tasks = dag::critical_path_analysis(tasks, precalc);
     let env = Env::new(input, precalc, tasks);
     let mut history = History::new();
-    let mut state = State::init(&env);
+    let mut beam = vec![State::init(&env)];
     let mut turn = 0;
+    const BEAM_SIZE: usize = 100;
 
-    while !state.is_completed(&env) {
+    while !beam[0].is_completed(&env) {
         turn += 1;
 
-        if turn > max_turn {
+        if turn > max_turn - 2 {
             eprintln!("turn limit exceeded");
-            return Ok(history.collect(state.history));
+            return Ok(history.collect(beam[0].history));
             //return Err("turn limit exceeded");
         }
 
-        state = state.gen_next(&env, &mut history);
+        let mut next_beam = vec![];
+        for state in beam {
+            next_beam.extend(state.gen_next(&env, &mut history));
+        }
+
+        if next_beam.len() > BEAM_SIZE {
+            next_beam.select_nth_unstable(BEAM_SIZE);
+            next_beam.truncate(BEAM_SIZE);
+        }
+
+        beam = next_beam;
     }
 
-    Ok(history.collect(state.history))
+    Ok(history.collect(beam[0].history))
 }
 
 struct Env<'a> {
@@ -136,7 +147,7 @@ impl State {
         }
     }
 
-    fn gen_next(&self, env: &Env, history: &mut History<[Operation; Input::N]>) -> Self {
+    fn gen_next(&self, env: &Env, history: &mut History<[Operation; Input::N]>) -> Vec<Self> {
         // 操作の候補を列挙
         let mut candidates = [vec![], vec![], vec![], vec![], vec![]];
         const MOVES: [Operation; 5] = [
@@ -193,9 +204,8 @@ impl State {
         let storage_flag = env.precalc.dist_dict.get_flag(|c| self.board[c] > 0);
         let mut cant_in = Grid::new([false; Input::N * Input::N]);
         let mut cant_move = Grid::new([[false; 8]; Input::N * Input::N]);
-        let mut best_state = self.clone();
-        let mut best_score = f64::MAX;
         let mut state = self.clone();
+        let mut beam = vec![];
 
         state.dfs(
             env,
@@ -203,14 +213,13 @@ impl State {
             &mut cant_in,
             &mut cant_move,
             history,
-            &mut best_state,
-            &mut best_score,
             &mut [Operation::None; Input::N],
+            &mut beam,
             storage_flag,
             0,
         );
 
-        best_state
+        beam
     }
 
     fn dfs(
@@ -220,9 +229,8 @@ impl State {
         cant_in: &mut Grid<bool>,
         cant_move: &mut Grid<[bool; 8]>,
         history: &mut History<[Operation; Input::N]>,
-        best_state: &mut State,
-        best_score: &mut f64,
         operations: &mut [Operation; Input::N],
+        beam: &mut Vec<State>,
         storage_flag: StorageFlag,
         depth: usize,
     ) {
@@ -238,10 +246,7 @@ impl State {
                 hist_index,
             );
 
-            if best_score.change_min(new_state.score) {
-                *best_state = new_state;
-            }
-
+            beam.push(new_state);
             return;
         }
 
@@ -298,9 +303,8 @@ impl State {
                 cant_in,
                 cant_move,
                 history,
-                best_state,
-                best_score,
                 operations,
+                beam,
                 storage_flag,
                 depth + 1,
             );
