@@ -25,7 +25,7 @@ pub fn order_tasks(input: &Input, tasks: &[Task]) -> Result<(), &'static str> {
     let state = annealing::annealing(&env, state, 1.0);
 
     let since = std::time::Instant::now();
-    let result = state.simulate(&env, 200)?;
+    let result: Turns = state.simulate(&env, 200)?;
     eprintln!("elapsed: {:?}", since.elapsed());
     eprintln!("{:?}", result);
     eprintln!("{}", result.calc_score());
@@ -209,11 +209,12 @@ impl State {
     }
 
     fn calc_score(&self, env: &Env, max_turn: usize) -> Result<f64, &'static str> {
-        let turns = self.simulate(env, max_turn)?;
+        let turns: Turns = self.simulate(env, max_turn)?;
         Ok(turns.calc_score())
     }
 
-    fn simulate(&self, env: &Env, max_turn: usize) -> Result<Turns, &'static str> {
+    fn simulate<T: Recorder>(&self, env: &Env, max_turn: usize) -> Result<T, &'static str> {
+        let mut recorder = T::new();
         let mut in_ptr = [0; Input::N];
         let mut out_next: [_; Input::N] = array::from_fn(|i| i * Input::N);
         let mut task_ptr = [0; Input::N];
@@ -255,6 +256,7 @@ impl State {
                             // コンテナをPickする
                             *crane = CraneState::Holding(container, from);
                             avail_turns[from] = turn + 2;
+                            recorder.record_pick(crane_i, coord);
 
                             if let TaskType::FromTemporary(_, _, _) = task {
                                 yard[from] = None;
@@ -290,6 +292,7 @@ impl State {
                             avail_turns[to] = turn + 2;
                             task_ptr[crane_i] += 1;
                             last_turns[crane_i] = turn;
+                            recorder.record_drop(crane_i, coord);
 
                             if let TaskType::ToTemporary(_, _, _) = task {
                                 yard[to] = Some(container);
@@ -312,7 +315,8 @@ impl State {
                 .zip(&self.tasks)
                 .all(|(&ptr, tasks)| ptr == tasks.len())
             {
-                return Ok(Turns::new(last_turns));
+                recorder.record_turn(last_turns);
+                return Ok(recorder);
             }
 
             if prev_state == cranes {
@@ -330,6 +334,20 @@ impl State {
 
         unreachable!();
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubTask {
+    Pick(Coord, usize),
+    Drop(Coord, usize),
+    EndOfOrder,
+}
+
+trait Recorder {
+    fn new() -> Self;
+    fn record_pick(&mut self, crane: usize, coord: Coord);
+    fn record_drop(&mut self, crane: usize, coord: Coord);
+    fn record_turn(&mut self, turns: [usize; Input::N]);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -353,5 +371,23 @@ impl Turns {
             .ln()
             * KAPPA;
         logsumexp
+    }
+}
+
+impl Recorder for Turns {
+    fn new() -> Self {
+        Self::new([0; Input::N])
+    }
+
+    fn record_pick(&mut self, _crane: usize, _coord: Coord) {
+        // do nothing
+    }
+
+    fn record_drop(&mut self, _crane: usize, _coord: Coord) {
+        // do nothing
+    }
+
+    fn record_turn(&mut self, turns: [usize; Input::N]) {
+        self.turns = turns;
     }
 }
