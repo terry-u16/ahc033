@@ -357,6 +357,15 @@ impl Turns {
     }
 }
 
+const STORAGES: [Coord; 6] = [
+    Coord::new(0, 2),
+    Coord::new(2, 2),
+    Coord::new(4, 2),
+    Coord::new(0, 3),
+    Coord::new(2, 3),
+    Coord::new(4, 3),
+];
+
 trait Neigh {
     fn neigh(&self, env: &Env, state: State) -> State;
 }
@@ -431,14 +440,14 @@ impl Neigh for Move {
     }
 }
 
-struct SwapBetweenCrane {
+struct SwapSingle {
     crane0: usize,
     crane1: usize,
     index0: usize,
     index1: usize,
 }
 
-impl SwapBetweenCrane {
+impl SwapSingle {
     fn gen(state: &State, rng: &mut impl Rng) -> Option<Box<dyn Neigh>> {
         let candidates = (0..Input::N)
             .filter(|&i| state.tasks[i].len() >= 1)
@@ -463,7 +472,7 @@ impl SwapBetweenCrane {
     }
 }
 
-impl Neigh for SwapBetweenCrane {
+impl Neigh for SwapSingle {
     fn neigh(&self, _env: &Env, mut state: State) -> State {
         let temp = state.tasks[self.crane0][self.index0];
         state.tasks[self.crane0][self.index0] = state.tasks[self.crane1][self.index1];
@@ -515,14 +524,6 @@ impl ChangeStoragePos {
         }
 
         let &(container, _) = candidates.choose(rng)?;
-        const STORAGES: [Coord; 6] = [
-            Coord::new(0, 2),
-            Coord::new(2, 2),
-            Coord::new(4, 2),
-            Coord::new(0, 3),
-            Coord::new(2, 3),
-            Coord::new(4, 3),
-        ];
         let &pos = STORAGES.choose(rng).unwrap();
 
         Some(Box::new(Self { container, pos }))
@@ -618,6 +619,127 @@ impl Neigh for SwapStoragePos {
     }
 }
 
+struct UseStorage {
+    container: Container,
+    pos: Coord,
+    crane: usize,
+    index: usize,
+}
+
+impl UseStorage {
+    fn gen(state: &State, rng: &mut impl Rng) -> Option<Box<dyn Neigh>> {
+        let mut candidates = vec![];
+        let mut index = 0;
+
+        for tasks in state.tasks.iter() {
+            for (i, &task) in tasks.iter().enumerate() {
+                if let TaskType::Direct(container, _, _) = task {
+                    candidates.push(container);
+                    index = i;
+                }
+            }
+        }
+
+        let &container = candidates.choose(rng)?;
+        let &pos = STORAGES.choose(rng).unwrap();
+        let crane = rng.gen_range(0..Input::N);
+        let index = rng.gen_range(
+            (index.saturating_sub(1).min(state.tasks[crane].len()))..=state.tasks[crane].len(),
+        );
+
+        Some(Box::new(Self {
+            container,
+            pos,
+            crane,
+            index,
+        }))
+    }
+}
+
+impl Neigh for UseStorage {
+    fn neigh(&self, _env: &Env, mut state: State) -> State {
+        'main: for tasks in state.tasks.iter_mut() {
+            for task in tasks.iter_mut() {
+                match *task {
+                    TaskType::Direct(container, from, _) => {
+                        if container == self.container {
+                            *task = TaskType::ToTemporary(container, from, self.pos);
+                            break 'main;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        state.tasks[self.crane].insert(
+            self.index,
+            TaskType::FromTemporary(self.container, self.pos, Input::get_goal(self.container)),
+        );
+
+        state
+    }
+}
+
+struct DisuseStorage {
+    container: Container,
+}
+
+impl DisuseStorage {
+    fn gen(state: &State, rng: &mut impl Rng) -> Option<Box<dyn Neigh>> {
+        let mut candidates = vec![];
+
+        for tasks in state.tasks.iter() {
+            for &task in tasks.iter() {
+                if let TaskType::ToTemporary(container, _, _) = task {
+                    candidates.push(container);
+                }
+            }
+        }
+
+        let &container = candidates.choose(rng)?;
+
+        Some(Box::new(Self { container }))
+    }
+}
+
+impl Neigh for DisuseStorage {
+    fn neigh(&self, _env: &Env, mut state: State) -> State {
+        let mut to_crane = !0;
+        let mut to_index = !0;
+        let mut to_in = Coord::new(0, 0);
+        let mut from_crane = !0;
+        let mut from_index = !0;
+        let mut from_out = Coord::new(0, 0);
+
+        for (crane, tasks) in state.tasks.iter_mut().enumerate() {
+            for (index, task) in tasks.iter_mut().enumerate() {
+                match *task {
+                    TaskType::ToTemporary(container, from, _) => {
+                        if container == self.container {
+                            to_crane = crane;
+                            to_index = index;
+                            to_in = from;
+                        }
+                    }
+                    TaskType::FromTemporary(container, _, to) => {
+                        if container == self.container {
+                            from_crane = crane;
+                            from_index = index;
+                            from_out = to;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        state.tasks[to_crane][to_index] = TaskType::Direct(self.container, to_in, from_out);
+        state.tasks[from_crane].remove(from_index);
+        state
+    }
+}
+
 fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
     let mut state = initial_solution;
     let mut best_state = state.clone();
@@ -654,10 +776,12 @@ fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
         let neigh = match neigh_type {
             0 => SwapAfter::gen(&state, &mut rng),
             1 => Move::gen(&state, &mut rng),
-            2 => SwapBetweenCrane::gen(&state, &mut rng),
+            2 => SwapSingle::gen(&state, &mut rng),
             3 => SwapInCrane::gen(&state, &mut rng),
             4 => ChangeStoragePos::gen(&state, &mut rng),
             5 => SwapStoragePos::gen(&state, &mut rng),
+            //6 => UseStorage::gen(&state, &mut rng),
+            //7 => DisuseStorage::gen(&state, &mut rng),
             _ => unreachable!(),
         };
         let Some(neigh) = neigh else {
