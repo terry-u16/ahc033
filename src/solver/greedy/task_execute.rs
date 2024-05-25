@@ -1,3 +1,5 @@
+mod dag;
+
 use itertools::Itertools;
 use rand::prelude::*;
 use std::collections::VecDeque;
@@ -8,13 +10,17 @@ use crate::{
     problem::{CraneState, Grid, Input, Operation, Yard},
 };
 
-use super::task_gen::Task;
+use super::{task_gen::Task, task_order::SubTask, Precalc};
 
 pub fn execute(
     yard: &Yard,
+    precalc: &Precalc,
+    t: &[Vec<SubTask>; Input::N],
     tasks: &[Option<Task>; Input::N],
     rng: &mut impl Rng,
 ) -> [Operation; Input::N] {
+    _ = dag::critical_path_analysis(t, precalc);
+
     let mut operations = [
         Operation::None,
         Operation::None,

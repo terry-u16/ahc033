@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Index, IndexMut},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {
     row: u8,
     col: u8,

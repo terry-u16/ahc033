@@ -1,20 +1,20 @@
 mod annealing;
 mod breakdown;
 
-use super::task_gen::Task;
+use super::{task_gen::Task, DistDict, Precalc};
 use crate::{
-    common::ChangeMinMax,
-    grid::{Coord, ADJACENTS},
+    grid::Coord,
     problem::{Container, CraneState, Grid, Input},
 };
 use itertools::Itertools;
-use std::{array, collections::VecDeque};
+use std::array;
 
 pub fn order_tasks(
     input: &Input,
+    precalc: &Precalc,
     tasks: &[Task],
 ) -> Result<[Vec<SubTask>; Input::N], &'static str> {
-    let env = Env::new(&input);
+    let env = Env::new(&input, &precalc.dist_dict);
     let state1 = State::new(tasks, |_| 0);
     let state2 = State::new(tasks, |i| i % Input::N);
 
@@ -47,139 +47,14 @@ enum TaskType {
 #[derive(Debug, Clone)]
 struct Env<'a> {
     input: &'a Input,
-    dist_dict: DistDict,
+    dist_dict: &'a DistDict,
 }
 
 impl<'a> Env<'a> {
-    fn new(input: &'a Input) -> Self {
-        let dist_dict = DistDict::new();
+    fn new(input: &'a Input, dist_dict: &'a DistDict) -> Self {
         Self { input, dist_dict }
     }
 }
-
-#[derive(Debug, Clone)]
-struct DistDict {
-    dists: [Vec<Grid<Grid<usize>>>; 2],
-    next: [Vec<Grid<Grid<Coord>>>; 2],
-}
-
-impl DistDict {
-    const STORAGES: [Coord; 11] = [
-        Coord::new(0, 0),
-        Coord::new(1, 0),
-        Coord::new(2, 0),
-        Coord::new(3, 0),
-        Coord::new(4, 0),
-        Coord::new(0, 2),
-        Coord::new(2, 2),
-        Coord::new(4, 2),
-        Coord::new(0, 3),
-        Coord::new(2, 3),
-        Coord::new(4, 3),
-    ];
-
-    fn new() -> Self {
-        let mut dists_with_container = vec![];
-        let mut next_with_container = vec![];
-
-        for flag in 0..1 << Self::STORAGES.len() {
-            let mut board = Grid::new([false; Input::N * Input::N]);
-
-            for (i, &storage) in Self::STORAGES.iter().enumerate() {
-                if (flag & (1 << i)) > 0 {
-                    board[storage] = true;
-                }
-            }
-
-            let mut d =
-                Grid::new([Grid::new([usize::MAX; Input::N * Input::N]); Input::N * Input::N]);
-            let mut next = Grid::new(
-                [Grid::new([Coord::new(0, 0); Input::N * Input::N]); Input::N * Input::N],
-            );
-
-            for row in 0..Input::N {
-                for col in 0..Input::N {
-                    let c = Coord::new(row, col);
-                    Self::bfs(&board, &mut d[c], &mut next[c], c);
-                }
-            }
-
-            dists_with_container.push(d);
-            next_with_container.push(next);
-        }
-
-        // コンテナなし = flagが0
-        let dists_without_container =
-            vec![dists_with_container[0].clone(); dists_with_container.len()];
-        let next_without_container =
-            vec![next_with_container[0].clone(); next_with_container.len()];
-
-        Self {
-            dists: [dists_without_container, dists_with_container],
-            next: [next_without_container, next_with_container],
-        }
-    }
-
-    fn bfs(board: &Grid<bool>, dists: &mut Grid<usize>, next: &mut Grid<Coord>, from: Coord) {
-        dists[from] = 0;
-        let mut queue = VecDeque::new();
-        queue.push_back(from);
-
-        while let Some(coord) = queue.pop_front() {
-            let next_dist = dists[coord] + 1;
-
-            for &adj in ADJACENTS.iter() {
-                let next = coord + adj;
-
-                if next.in_map(Input::N) && !board[next] && dists[next].change_min(next_dist) {
-                    queue.push_back(next);
-                }
-            }
-        }
-
-        for row in 0..Input::N {
-            for col in 0..Input::N {
-                let c = Coord::new(row, col);
-                let mut best = c;
-                let mut best_dist = dists[best];
-
-                for &adj in ADJACENTS.iter() {
-                    let next = c + adj;
-
-                    if next.in_map(Input::N) && best_dist.change_min(dists[next]) {
-                        best = next;
-                    }
-                }
-
-                next[c] = best;
-            }
-        }
-    }
-
-    fn get_flag(&self, f: impl Fn(Coord) -> bool) -> StorageFlag {
-        let mut flag = 0;
-
-        for (i, &storage) in Self::STORAGES.iter().enumerate() {
-            if f(storage) {
-                flag |= 1 << i;
-            }
-        }
-
-        StorageFlag(flag)
-    }
-
-    fn dist(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> usize {
-        // [to][from]の順になることに注意
-        self.dists[consider_contianer as usize][flag.0][to][from]
-    }
-
-    fn next(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> Coord {
-        self.next[consider_contianer as usize][flag.0][to][from]
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct StorageFlag(usize);
 
 #[derive(Debug, Clone)]
 struct State {
@@ -345,6 +220,24 @@ pub enum SubTask {
     Pick(Coord, usize),
     Drop(Coord, usize),
     EndOfOrder,
+}
+
+impl SubTask {
+    pub fn coord(&self) -> Option<Coord> {
+        match self {
+            SubTask::Pick(coord, _) => Some(*coord),
+            SubTask::Drop(coord, _) => Some(*coord),
+            SubTask::EndOfOrder => None,
+        }
+    }
+
+    pub fn index(&self) -> Option<usize> {
+        match self {
+            SubTask::Pick(_, index) => Some(*index),
+            SubTask::Drop(_, index) => Some(*index),
+            SubTask::EndOfOrder => None,
+        }
+    }
 }
 
 trait Recorder {
