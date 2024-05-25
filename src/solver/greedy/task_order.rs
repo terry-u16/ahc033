@@ -1,4 +1,5 @@
 mod annealing;
+mod breakdown;
 
 use super::task_gen::Task;
 use crate::{
@@ -9,7 +10,10 @@ use crate::{
 use itertools::Itertools;
 use std::{array, collections::VecDeque};
 
-pub fn order_tasks(input: &Input, tasks: &[Task]) -> Result<(), &'static str> {
+pub fn order_tasks(
+    input: &Input,
+    tasks: &[Task],
+) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input);
     let state1 = State::new(tasks, |_| 0);
     let state2 = State::new(tasks, |i| i % Input::N);
@@ -30,7 +34,7 @@ pub fn order_tasks(input: &Input, tasks: &[Task]) -> Result<(), &'static str> {
     eprintln!("{:?}", result);
     eprintln!("{}", result.calc_score());
 
-    todo!();
+    breakdown::breakdown(&env, &state)
 }
 
 #[derive(Debug, Clone, Copy)]

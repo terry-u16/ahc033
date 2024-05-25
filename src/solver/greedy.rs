@@ -40,7 +40,12 @@ impl Solver for GreedySolver {
 
         let mut yard = Yard::new(&input);
         let mut output = Output::new();
-        task_order::order_tasks(input, &all_tasks);
+        let subtasks = task_order::order_tasks(input, &all_tasks)?;
+
+        for t in subtasks.iter() {
+            eprintln!("{:?}", t);
+        }
+        panic!();
 
         while !yard.is_end() {
             let tasks = task_assign::assign_tasks(&mut yard, &mut all_tasks);
