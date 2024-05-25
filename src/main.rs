@@ -20,23 +20,20 @@ fn main() -> Result<(), &'static str> {
     let mut best_score = best_result.score();
     let mut rng = Pcg64Mcg::from_entropy();
 
-    while since.elapsed().as_secs_f64() < 2.9 {
-        let solver = GreedySolver::new(rng.gen(), best_score as usize);
-        let result = match solver.solve(&input) {
-            Ok(result) => result,
-            Err(err) => {
-                eprintln!("{}", err);
-                continue;
-            }
-        };
-        let score = result.score();
+    let solver = GreedySolver::new(rng.gen(), best_score as usize);
+    match solver.solve(&input) {
+        Ok(result) => {
+            let score = result.score();
 
-        if best_score.change_min(score) {
-            best_result = result;
-            best_score = score;
-            eprintln!("score updated!: {}", score);
+            if best_score.change_min(score) {
+                best_result = result;
+                eprintln!("score updated!: {}", score);
+            }
         }
-    }
+        Err(err) => {
+            eprintln!("{}", err);
+        }
+    };
 
     print!("{}", best_result.output());
     eprintln!("Score: {}", best_result.score());

@@ -91,3 +91,40 @@ impl<T: Default + Copy, const N: usize> ConstQueue<T, N> {
         &self.queue[self.front..]
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct History<T: Clone> {
+    history: Vec<(T, HistoryIndex)>,
+}
+
+impl<T: Clone> History<T> {
+    pub fn new() -> Self {
+        History { history: vec![] }
+    }
+
+    pub fn push(&mut self, action: T, parent: HistoryIndex) -> HistoryIndex {
+        let index = HistoryIndex(self.history.len());
+        self.history.push((action, parent));
+        index
+    }
+
+    pub fn collect(&self, mut index: HistoryIndex) -> Vec<T> {
+        let mut actions = vec![];
+
+        while index != HistoryIndex::ROOT {
+            let (action, i) = self.history[index.0].clone();
+            actions.push(action);
+            index = i;
+        }
+
+        actions.reverse();
+        actions
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct HistoryIndex(usize);
+
+impl HistoryIndex {
+    pub const ROOT: Self = Self(!0);
+}

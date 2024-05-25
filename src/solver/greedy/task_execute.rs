@@ -2,288 +2,347 @@ mod dag;
 
 use itertools::Itertools;
 use rand::prelude::*;
-use std::collections::VecDeque;
+use std::{array, collections::VecDeque};
 
 use crate::{
     common::ChangeMinMax as _,
+    data_structures::{History, HistoryIndex},
     grid::{Coord, ADJACENTS},
-    problem::{CraneState, Grid, Input, Operation, Yard},
+    problem::{Container, CraneState, Grid, Input, Operation, Yard},
 };
 
-use super::{task_gen::Task, task_order::SubTask, Precalc};
+use self::dag::TaskSet;
+
+use super::{task_gen::Task, task_order::SubTask, Precalc, StorageFlag};
 
 pub fn execute(
-    yard: &Yard,
+    input: &Input,
     precalc: &Precalc,
-    t: &[Vec<SubTask>; Input::N],
-    tasks: &[Option<Task>; Input::N],
-    rng: &mut impl Rng,
-) -> [Operation; Input::N] {
-    _ = dag::critical_path_analysis(t, precalc);
+    tasks: &[Vec<SubTask>; Input::N],
+    max_turn: usize,
+) -> Result<Vec<[Operation; Input::N]>, &'static str> {
+    let tasks = dag::critical_path_analysis(tasks, precalc);
+    let env = Env::new(input, precalc, tasks);
+    let mut history = History::new();
+    let mut state = State::init(&env);
+    let mut turn = 0;
 
-    let mut operations = [
-        Operation::None,
-        Operation::None,
-        Operation::None,
-        Operation::None,
-        Operation::None,
-    ];
+    while !state.is_completed(&env) {
+        turn += 1;
 
-    let (dists_container, dists_no_container) = calc_dists_all(yard);
-    let mut crane_order = (0..Input::N)
-        .filter(|&i| yard.cranes()[i] != CraneState::Destroyed)
-        .collect_vec();
-    crane_order.sort_by_key(|&i| tasks[i].as_ref().map_or(usize::MAX, |t| t.index()));
+        if turn > max_turn {
+            eprintln!("turn limit exceeded");
+            return Ok(history.collect(state.history));
+            //return Err("turn limit exceeded");
+        }
 
-    // 操作の候補を列挙
-    let mut candidates = [vec![], vec![], vec![], vec![], vec![]];
-    let moves = [
-        Operation::None,
-        Operation::Up,
-        Operation::Right,
-        Operation::Down,
-        Operation::Left,
-    ];
+        state = state.gen_next(&env, &mut history);
+    }
 
-    for (i, &crane_i) in crane_order.iter().enumerate() {
-        let task = &tasks[crane_i];
-        let crane = yard.cranes()[crane_i];
-        let candidates = &mut candidates[i];
+    Ok(history.collect(state.history))
+}
 
-        match (task, crane) {
-            (None, CraneState::Empty(_)) => candidates.push(Operation::Destroy),
-            (None, CraneState::Holding(_, _)) => unreachable!("Holding crane shold have task"),
-            (None, CraneState::Destroyed) => unreachable!("Destroyed crane shold not be here"),
-            (Some(task), CraneState::Empty(coord)) => {
-                if task.from() == coord {
-                    if yard.grid()[coord] == Some(task.container()) {
-                        candidates.push(Operation::Pick);
+struct Env<'a> {
+    input: &'a Input,
+    precalc: &'a Precalc,
+    tasks: TaskSet,
+}
+
+impl<'a> Env<'a> {
+    fn new(input: &'a Input, precalc: &'a Precalc, tasks: TaskSet) -> Self {
+        Self {
+            input,
+            precalc,
+            tasks,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct State {
+    task_ptr: [u8; Input::N],
+    grid_ptr: Grid<u8>,
+    cranes: [CraneState; Input::N],
+    board: Grid<i8>,
+    history: HistoryIndex,
+    score: f64,
+}
+
+impl State {
+    fn init(env: &Env) -> Self {
+        let task_ptr = env.tasks.init_ptr;
+        let cranes = array::from_fn(|i| CraneState::Empty(Coord::new(i, 0)));
+        let history = HistoryIndex::ROOT;
+        let mut board = Grid::with_default();
+        board[Coord::new(0, 0)] = 5;
+        board[Coord::new(1, 0)] = 5;
+        board[Coord::new(2, 0)] = 5;
+        board[Coord::new(3, 0)] = 5;
+        board[Coord::new(4, 0)] = 5;
+        board[Coord::new(0, 4)] = -5;
+        board[Coord::new(1, 4)] = -5;
+        board[Coord::new(2, 4)] = -5;
+        board[Coord::new(3, 4)] = -5;
+        board[Coord::new(4, 4)] = -5;
+
+        let storage_flag = env.precalc.dist_dict.get_flag(|c| board[c] > 0);
+        let grid_ptr = Grid::with_default();
+
+        Self::new(
+            env,
+            task_ptr,
+            grid_ptr,
+            cranes,
+            board,
+            storage_flag,
+            history,
+        )
+    }
+
+    fn new(
+        env: &Env,
+        task_ptr: [u8; Input::N],
+        grid_ptr: Grid<u8>,
+        cranes: [CraneState; Input::N],
+        board: Grid<i8>,
+        storage_flag: StorageFlag,
+        history: HistoryIndex,
+    ) -> Self {
+        let mut score = 0.0;
+
+        for (i, &task_ptr) in task_ptr.iter().enumerate() {
+            let crane = cranes[i];
+            let task = &env.tasks.tasks[task_ptr as usize];
+            let edge_cost = if let (Some(c0), Some(c1)) = (cranes[i].coord(), task.coord()) {
+                let consider_container = !Input::is_large_crane(i) && crane.is_holding();
+                env.precalc
+                    .dist_dict
+                    .dist(storage_flag, c0, c1, consider_container)
+                    + 1
+            } else {
+                0
+            };
+
+            score += env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
+        }
+
+        Self {
+            task_ptr,
+            grid_ptr,
+            cranes,
+            board,
+            history,
+            score,
+        }
+    }
+
+    fn gen_next(&self, env: &Env, history: &mut History<[Operation; Input::N]>) -> Self {
+        // 操作の候補を列挙
+        let mut candidates = [vec![], vec![], vec![], vec![], vec![]];
+        const MOVES: [Operation; 5] = [
+            Operation::None,
+            Operation::Up,
+            Operation::Right,
+            Operation::Down,
+            Operation::Left,
+        ];
+
+        for crane_i in 0..Input::N {
+            let crane = self.cranes[crane_i];
+            let candidates = &mut candidates[crane_i];
+            let task = env.tasks.tasks[self.task_ptr[crane_i] as usize];
+
+            if crane == CraneState::Destroyed {
+                candidates.push(Operation::None);
+            } else if task == SubTask::EndOfOrder {
+                candidates.push(Operation::Destroy);
+            } else {
+                let coord = crane.coord().unwrap();
+                let destination = task.coord().unwrap();
+
+                if coord == destination && self.grid_ptr[coord] == task.index().unwrap() as u8 {
+                    // pick / drop
+                    let op = match task {
+                        SubTask::Pick(_, _) => Operation::Pick,
+                        SubTask::Drop(_, _) => Operation::Drop,
+                        SubTask::EndOfOrder => unreachable!(),
+                    };
+                    candidates.push(op);
+                } else {
+                    if crane.is_holding() && !Input::is_large_crane(crane_i) {
+                        // コンテナを考慮して移動
+                        for &op in MOVES.iter() {
+                            let next = coord + op.dir();
+                            if next.in_map(Input::N) && self.board[next] <= 0 {
+                                candidates.push(op);
+                            }
+                        }
                     } else {
-                        for &op in moves[1..].iter() {
+                        // コンテナを無視して移動
+                        for &op in MOVES.iter() {
                             let next = coord + op.dir();
                             if next.in_map(Input::N) {
                                 candidates.push(op);
                             }
                         }
                     }
-                } else {
-                    for &op in moves.iter() {
-                        let next = coord + op.dir();
-                        if next.in_map(Input::N) {
-                            candidates.push(op);
-                        }
-                    }
                 }
             }
-            (Some(task), CraneState::Holding(_, coord)) => {
-                if task.to() == coord {
-                    candidates.push(Operation::Drop);
-                } else {
-                    for &op in moves.iter() {
-                        let next = coord + op.dir();
-                        if next.in_map(Input::N)
-                            && (Input::is_large_crane(crane_i) || yard.grid()[next].is_none())
-                        {
-                            candidates.push(op);
-                        }
-                    }
-                }
-            }
-            (Some(_), CraneState::Destroyed) => unreachable!("Destroyed crane shold not be here"),
         }
 
-        candidates.shuffle(rng);
-    }
+        let storage_flag = env.precalc.dist_dict.get_flag(|c| self.board[c] > 0);
+        let mut cant_in = Grid::new([false; Input::N * Input::N]);
+        let mut cant_move = Grid::new([[false; 8]; Input::N * Input::N]);
+        let mut best_state = self.clone();
+        let mut best_score = f64::MAX;
+        let mut state = self.clone();
 
-    let mut best_operations = operations.clone();
-    let mut cant_in = yard.grid().map(|_| false);
-    let mut cant_move = yard.grid().map(|_| [false; 8]);
-    let mut max_dists = yard.grid().map(|_| 0);
-    let mut best_score = i32::MAX;
-
-    dfs(
-        &mut operations,
-        &mut best_operations,
-        &candidates,
-        &mut cant_in,
-        &mut cant_move,
-        &mut max_dists,
-        &dists_container,
-        &dists_no_container,
-        yard.cranes(),
-        tasks,
-        &crane_order,
-        0,
-        0,
-        &mut best_score,
-    );
-
-    best_operations
-}
-
-fn dfs(
-    operations: &mut [Operation; Input::N],
-    best_operations: &mut [Operation; Input::N],
-    candidates: &[Vec<Operation>],
-    cant_in: &mut Grid<bool>,
-    cant_move: &mut Grid<[bool; 8]>,
-    max_dists: &mut Grid<i32>,
-    dists_container: &Grid<Grid<i32>>,
-    dists_no_container: &Grid<Grid<i32>>,
-    cranes: &[CraneState; Input::N],
-    tasks: &[Option<Task>; Input::N],
-    crane_order: &[usize],
-    depth: usize,
-    score: i32,
-    best_score: &mut i32,
-) {
-    if depth == crane_order.len() {
-        if best_score.change_min(score) {
-            *best_operations = *operations;
-        }
-
-        return;
-    }
-
-    let crane_i = crane_order[depth];
-    let crane = cranes[crane_i];
-    let task = &tasks[crane_i];
-    let dists_back = dists_no_container;
-    let dists_forward = if Input::is_large_crane(crane_i) {
-        dists_no_container
-    } else {
-        dists_container
-    };
-
-    for &op in candidates[depth].iter() {
-        let coord = crane.coord().unwrap();
-        let next = coord + op.dir();
-        let op_usize = op as usize;
-
-        if (cant_in[next] && op != Operation::Destroy) || cant_move[coord][op_usize] {
-            continue;
-        }
-
-        let mut new_score = score;
-        let dist = if let Some(task) = task {
-            match crane {
-                CraneState::Empty(_) => {
-                    dists_back[next][task.from()] + dists_forward[task.from()][task.to()]
-                }
-                CraneState::Holding(_, _) => dists_forward[next][task.to()],
-                CraneState::Destroyed => 0,
-            }
-        } else {
-            0
-        };
-
-        let score_mul = 1 << (Input::N - depth - 1) as i32;
-
-        let old_max_dist = if let Some(goal) = task.as_ref().map(|t| t.to()) {
-            let old_max_dist = max_dists[goal];
-            new_score += (max_dists[goal] - dist).max(0) * 2 * score_mul;
-            max_dists[goal].change_max(dist);
-            old_max_dist
-        } else {
-            0
-        };
-
-        new_score += dist * score_mul;
-        operations[crane_i] = op;
-
-        if op != Operation::Destroy {
-            cant_in[next] = true;
-        }
-
-        // クロスする移動もNG
-        if op_usize < 4 {
-            cant_move[next][op_usize ^ 2] = true;
-        }
-
-        dfs(
-            operations,
-            best_operations,
-            candidates,
-            cant_in,
-            cant_move,
-            max_dists,
-            dists_container,
-            dists_no_container,
-            cranes,
-            tasks,
-            crane_order,
-            depth + 1,
-            new_score,
-            best_score,
+        state.dfs(
+            env,
+            &candidates,
+            &mut cant_in,
+            &mut cant_move,
+            history,
+            &mut best_state,
+            &mut best_score,
+            &mut [Operation::None; Input::N],
+            storage_flag,
+            0,
         );
 
-        if op != Operation::Destroy {
-            cant_in[next] = false;
-        }
-
-        if op_usize < 4 {
-            cant_move[next][op_usize ^ 2] = false;
-        }
-
-        if let Some(goal) = task.as_ref().map(|t| t.to()) {
-            max_dists[goal] = old_max_dist;
-        }
-    }
-}
-
-fn calc_dists_all(yard: &Yard) -> (Grid<Grid<i32>>, Grid<Grid<i32>>) {
-    let map_container = yard.grid().map(|c| c.is_none());
-    let map_no_container = yard.grid().map(|_| true);
-
-    let mut starts = Grid::new([Coord::new(0, 0); Input::N * Input::N]);
-
-    for row in 0..Input::N {
-        for col in 0..Input::N {
-            let c = Coord::new(row, col);
-            starts[c] = c;
-        }
+        best_state
     }
 
-    let dists_container = starts.map(|c| bfs(&map_container, c));
-    let dists_no_container = starts.map(|c| bfs(&map_no_container, c));
+    fn dfs(
+        &mut self,
+        env: &Env,
+        candidates: &[Vec<Operation>],
+        cant_in: &mut Grid<bool>,
+        cant_move: &mut Grid<[bool; 8]>,
+        history: &mut History<[Operation; Input::N]>,
+        best_state: &mut State,
+        best_score: &mut f64,
+        operations: &mut [Operation; Input::N],
+        storage_flag: StorageFlag,
+        depth: usize,
+    ) {
+        if depth == Input::N {
+            let hist_index = history.push(operations.clone(), self.history);
+            let new_state = Self::new(
+                env,
+                self.task_ptr,
+                self.grid_ptr,
+                self.cranes,
+                self.board,
+                storage_flag,
+                hist_index,
+            );
 
-    (dists_container, dists_no_container)
-}
+            if best_score.change_min(new_state.score) {
+                *best_state = new_state;
+            }
 
-fn bfs(map: &Grid<bool>, start: Coord) -> Grid<i32> {
-    let mut dists = Grid::new([i32::MAX / 2; Input::N * Input::N]);
-    let mut queue = VecDeque::new();
-    dists[start] = 0;
-    queue.push_back(start);
+            return;
+        }
 
-    while let Some(coord) = queue.pop_front() {
-        for &adj in ADJACENTS.iter() {
-            let next = coord + adj;
-            let next_dist = dists[coord] + 1;
+        let crane_i = depth;
+        let crane = self.cranes[crane_i];
 
-            if next.in_map(Input::N) && map[next] && dists[next].change_min(next_dist) {
-                queue.push_back(next);
+        for &op in candidates[depth].iter() {
+            let coord = crane.coord().unwrap();
+            let next = coord + op.dir();
+            let op_usize = op as usize;
+
+            if (cant_in[next] && op != Operation::Destroy) || cant_move[coord][op_usize] {
+                continue;
+            }
+
+            let board_change = match op {
+                Operation::Pick => -1,
+                Operation::Drop => 1,
+                _ => 0,
+            };
+            let current_crane = self.cranes[crane_i];
+            let task_ptr_diff = match op {
+                Operation::Pick => 1,
+                Operation::Drop => 1,
+                _ => 0,
+            };
+            self.board[coord] += board_change;
+            self.grid_ptr[coord] = self.grid_ptr[coord].wrapping_add_signed(task_ptr_diff);
+            self.task_ptr[crane_i] = self.task_ptr[crane_i].wrapping_add_signed(task_ptr_diff);
+            self.cranes[crane_i] = match op {
+                Operation::Pick => CraneState::Holding(Container::new(!0), coord),
+                Operation::Drop => CraneState::Empty(coord),
+                _ => match current_crane {
+                    CraneState::Empty(_) => CraneState::Empty(next),
+                    CraneState::Holding(container, _) => CraneState::Holding(container, next),
+                    CraneState::Destroyed => CraneState::Destroyed,
+                },
+            };
+
+            operations[crane_i] = op;
+
+            if op != Operation::Destroy {
+                cant_in[next] = true;
+            }
+
+            // クロスする移動もNG
+            if op_usize < 4 {
+                cant_move[next][op_usize ^ 2] = true;
+            }
+
+            self.dfs(
+                env,
+                candidates,
+                cant_in,
+                cant_move,
+                history,
+                best_state,
+                best_score,
+                operations,
+                storage_flag,
+                depth + 1,
+            );
+
+            self.board[coord] -= board_change;
+            self.grid_ptr[coord] = self.grid_ptr[coord].wrapping_add_signed(-task_ptr_diff);
+            self.task_ptr[crane_i] = self.task_ptr[crane_i].wrapping_add_signed(-task_ptr_diff);
+            self.cranes[crane_i] = current_crane;
+
+            if op != Operation::Destroy {
+                cant_in[next] = false;
+            }
+
+            if op_usize < 4 {
+                cant_move[next][op_usize ^ 2] = false;
             }
         }
     }
 
-    // コンテナがあるマスがINFにならないようにする
-    let mut dists_no_inf = dists.clone();
-
-    for row in 0..Input::N {
-        for col in 0..Input::N {
-            let c = Coord::new(row, col);
-
-            for &adj in ADJACENTS.iter() {
-                let next = c + adj;
-
-                if next.in_map(Input::N) {
-                    let d = dists[next] + 1;
-                    dists_no_inf[c].change_min(d);
-                }
-            }
-        }
+    fn is_completed(&self, env: &Env) -> bool {
+        self.task_ptr
+            .iter()
+            .all(|&ptr| env.tasks.tasks[ptr as usize] == SubTask::EndOfOrder)
     }
+}
 
-    dists_no_inf
+impl PartialEq for State {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for State {}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.score.partial_cmp(&other.score)
+    }
+}
+
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(&other).unwrap()
+    }
 }

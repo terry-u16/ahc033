@@ -31,53 +31,22 @@ impl Solver for GreedySolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
         let precalc = Precalc::new();
-        let mut all_tasks = task_gen::generate_tasks(input, &mut rng)?;
+        let all_tasks = task_gen::generate_tasks(input, &mut rng)?;
 
-        //for s in all_tasks.iter().map(|t| {
-        //    format!(
-        //        "{:>2} | {:>2} {} -> {}",
-        //        t.index(),
-        //        t.container().index(),
-        //        t.from(),
-        //        t.to()
-        //    )
-        //}) {
-        //    eprintln!("{}", s);
-        //}
-
-        let mut yard = Yard::new(&input);
-        let mut output = Output::new();
         let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
 
         for t in subtasks.iter() {
             eprintln!("{:?}", t);
         }
 
-        while !yard.is_end() {
-            let tasks = task_assign::assign_tasks(&mut yard, &mut all_tasks);
-            let operations =
-                task_execute::execute(&mut yard, &precalc, &subtasks, &tasks, &mut rng);
-            //eprintln!("turn: {:>3} | {:?}", output.len(), operations);
+        let operations = task_execute::execute(input, &precalc, &subtasks, self.max_turn)?;
+        let mut yard = Yard::new(&input);
+        let mut output = Output::new();
 
-            for (i, op) in operations.iter().enumerate() {
-                if let Operation::Drop = op {
-                    all_tasks[tasks[i].as_ref().unwrap().index()].complete();
-                }
-            }
-
-            // for debug
-            // if let Err(err) = yard.apply(&operations) {
-            //     eprintln!("{}", err);
-            //     return Ok(SolverResult::new(output, &yard));
-            // };
-
-            yard.apply(&operations)?;
+        for op in operations.iter() {
+            yard.apply(op)?;
             yard.carry_in_and_ship();
-            output.push(&operations);
-
-            if output.len() > self.max_turn {
-                break;
-            }
+            output.push(op);
         }
 
         Ok(SolverResult::new(output, &yard))
@@ -214,13 +183,13 @@ impl DistDict {
         StorageFlag(flag)
     }
 
-    fn dist(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> usize {
+    fn dist(&self, flag: StorageFlag, from: Coord, to: Coord, consider_container: bool) -> usize {
         // [to][from]の順になることに注意
-        self.dists[consider_contianer as usize][flag.0][to][from]
+        self.dists[consider_container as usize][flag.0][to][from]
     }
 
-    fn next(&self, flag: StorageFlag, from: Coord, to: Coord, consider_contianer: bool) -> Coord {
-        self.next[consider_contianer as usize][flag.0][to][from]
+    fn next(&self, flag: StorageFlag, from: Coord, to: Coord, consider_container: bool) -> Coord {
+        self.next[consider_container as usize][flag.0][to][from]
     }
 }
 

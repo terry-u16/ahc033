@@ -108,6 +108,14 @@ impl CraneState {
             Self::Destroyed => None,
         }
     }
+
+    pub const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty(_))
+    }
+
+    pub const fn is_holding(&self) -> bool {
+        matches!(self, Self::Holding(_, _))
+    }
 }
 
 #[derive(Debug, Clone)]
