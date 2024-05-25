@@ -42,10 +42,9 @@ pub fn execute(
             next_beam.extend(state.gen_next(&env, &mut history));
         }
 
-        if next_beam.len() > BEAM_SIZE {
-            next_beam.select_nth_unstable(BEAM_SIZE);
-            next_beam.truncate(BEAM_SIZE);
-        }
+        next_beam.sort_unstable();
+        next_beam.truncate(BEAM_SIZE);
+        eprintln!("turn: {}, score: {}", turn, next_beam[0].score);
 
         beam = next_beam;
     }
@@ -137,7 +136,7 @@ impl State {
             scores[i] = env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
         }
 
-        let mut score = scores.iter().sum();
+        let mut score = scores.iter().sum::<f64>().ln() * Precalc::KAPPA;
 
         for i in 0..Input::N {
             let Some(coord0) = env.tasks.tasks[task_ptr[i] as usize].coord() else {
@@ -170,7 +169,7 @@ impl State {
                     );
 
                     score +=
-                        1e10 * index1.saturating_sub(index0) as f64 * d0.saturating_sub(d1) as f64;
+                        1e2 * index1.saturating_sub(index0) as f64 * d0.saturating_sub(d1) as f64;
                 }
             }
         }
