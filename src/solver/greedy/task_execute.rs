@@ -1,6 +1,7 @@
 mod dag;
 
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use rand::prelude::*;
 use std::{array, collections::VecDeque};
 
@@ -21,35 +22,43 @@ pub fn execute(
     tasks: &[Vec<SubTask>; Input::N],
     max_turn: usize,
 ) -> Result<Vec<[Operation; Input::N]>, &'static str> {
+    const BEAM_SIZE: usize = 3 * 3 * 3 * 3 * 3;
     let tasks = dag::critical_path_analysis(tasks, precalc);
     let env = Env::new(input, precalc, tasks);
     let mut history = History::new();
-    let mut beam = vec![State::init(&env)];
+    let mut beam = vec![None; BEAM_SIZE];
+    beam[0] = Some(State::init(&env));
     let mut turn = 0;
-    const BEAM_SIZE: usize = 100;
 
-    while !beam[0].is_completed(&env) {
+    while !beam
+        .iter()
+        .any(|s| s.map_or(false, |s| s.is_completed(&env)))
+    {
         turn += 1;
 
-        if turn > max_turn - 2 {
-            eprintln!("turn limit exceeded");
-            return Ok(history.collect(beam[0].history));
-            //return Err("turn limit exceeded");
+        if turn > max_turn {
+            return Err("turn limit exceeded");
         }
 
-        let mut next_beam = vec![];
+        let mut next_beam = vec![None; BEAM_SIZE];
         for state in beam {
-            next_beam.extend(state.gen_next(&env, &mut history));
-        }
+            let Some(state) = state else {
+                continue;
+            };
 
-        next_beam.sort_unstable();
-        next_beam.truncate(BEAM_SIZE);
-        eprintln!("turn: {}, score: {}", turn, next_beam[0].score);
+            state.gen_next(&env, &mut next_beam, &mut history);
+        }
 
         beam = next_beam;
     }
 
-    Ok(history.collect(beam[0].history))
+    let best = beam
+        .iter()
+        .min_by_key(|s| s.map_or(OrderedFloat(f64::MAX), |s| OrderedFloat(s.score)))
+        .unwrap()
+        .unwrap();
+
+    Ok(history.collect(best.history))
 }
 
 struct Env<'a> {
@@ -138,42 +147,6 @@ impl State {
 
         let mut score = scores.iter().sum::<f64>().ln() * Precalc::KAPPA;
 
-        for i in 0..Input::N {
-            let Some(coord0) = env.tasks.tasks[task_ptr[i] as usize].coord() else {
-                continue;
-            };
-
-            for j in 0..Input::N {
-                if i == j {
-                    continue;
-                }
-
-                let Some(coord1) = env.tasks.tasks[task_ptr[j] as usize].coord() else {
-                    continue;
-                };
-
-                if coord0 == coord1 {
-                    let index0 = env.tasks.tasks[task_ptr[i] as usize].index().unwrap();
-                    let index1 = env.tasks.tasks[task_ptr[j] as usize].index().unwrap();
-                    let d0 = env.precalc.dist_dict.dist(
-                        storage_flag,
-                        cranes[i].coord().unwrap(),
-                        coord0,
-                        false,
-                    );
-                    let d1 = env.precalc.dist_dict.dist(
-                        storage_flag,
-                        cranes[j].coord().unwrap(),
-                        coord1,
-                        false,
-                    );
-
-                    score +=
-                        1e2 * index1.saturating_sub(index0) as f64 * d0.saturating_sub(d1) as f64;
-                }
-            }
-        }
-
         Self {
             task_ptr,
             grid_ptr,
@@ -184,7 +157,12 @@ impl State {
         }
     }
 
-    fn gen_next(&self, env: &Env, history: &mut History<[Operation; Input::N]>) -> Vec<Self> {
+    fn gen_next(
+        &self,
+        env: &Env,
+        beam: &mut Vec<Option<State>>,
+        history: &mut History<[Operation; Input::N]>,
+    ) {
         // 操作の候補を列挙
         let mut candidates = [vec![], vec![], vec![], vec![], vec![]];
         const MOVES: [Operation; 5] = [
@@ -242,7 +220,6 @@ impl State {
         let mut cant_in = Grid::new([false; Input::N * Input::N]);
         let mut cant_move = Grid::new([[false; 8]; Input::N * Input::N]);
         let mut state = self.clone();
-        let mut beam = vec![];
 
         state.dfs(
             env,
@@ -251,12 +228,11 @@ impl State {
             &mut cant_move,
             history,
             &mut [Operation::None; Input::N],
-            &mut beam,
+            beam,
             storage_flag,
             0,
+            0,
         );
-
-        beam
     }
 
     fn dfs(
@@ -267,8 +243,9 @@ impl State {
         cant_move: &mut Grid<[bool; 8]>,
         history: &mut History<[Operation; Input::N]>,
         operations: &mut [Operation; Input::N],
-        beam: &mut Vec<State>,
+        beam: &mut Vec<Option<State>>,
         storage_flag: StorageFlag,
+        hash: usize,
         depth: usize,
     ) {
         if depth == Input::N {
@@ -283,7 +260,12 @@ impl State {
                 hist_index,
             );
 
-            beam.push(new_state);
+            let old_score = beam[hash].map_or(f64::MAX, |s| s.score);
+
+            if new_state.score < old_score {
+                beam[hash] = Some(new_state);
+            }
+
             return;
         }
 
@@ -304,6 +286,7 @@ impl State {
                     operations,
                     beam,
                     storage_flag,
+                    hash,
                     depth + 1,
                 );
 
@@ -357,6 +340,8 @@ impl State {
                 cant_move[next][op_usize ^ 2] = true;
             }
 
+            let new_hash = hash * 3 + (next.row() + next.col()) % 3;
+
             self.dfs(
                 env,
                 candidates,
@@ -366,6 +351,7 @@ impl State {
                 operations,
                 beam,
                 storage_flag,
+                new_hash,
                 depth + 1,
             );
 
