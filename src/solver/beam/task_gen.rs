@@ -68,7 +68,7 @@ impl Task {
     }
 }
 
-pub fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
+pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
     let (max_stock, history) = dp(input);
     //eprintln!("max_stock: {}", max_stock);
 

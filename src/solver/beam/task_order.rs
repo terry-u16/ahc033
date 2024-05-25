@@ -9,7 +9,7 @@ use crate::{
 use itertools::Itertools;
 use std::array;
 
-pub fn order_tasks(
+pub(super) fn order_tasks(
     input: &Input,
     precalc: &Precalc,
     tasks: &[Task],

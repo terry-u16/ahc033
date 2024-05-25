@@ -16,7 +16,7 @@ const STORAGES: [Coord; 6] = [
     Coord::new(4, 3),
 ];
 
-pub fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
+pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
     let mut state = initial_solution;
     let mut best_state = state.clone();
     let mut current_score = state.calc_score(env, usize::MAX).unwrap();

@@ -16,7 +16,7 @@ use self::dag::TaskSet;
 
 use super::{task_gen::Task, task_order::SubTask, Precalc, StorageFlag};
 
-pub fn execute(
+pub(super) fn execute(
     input: &Input,
     precalc: &Precalc,
     tasks: &[Vec<SubTask>; Input::N],
@@ -54,7 +54,8 @@ pub fn execute(
 
     let best = beam
         .iter()
-        .min_by_key(|s| s.map_or(OrderedFloat(f64::MAX), |s| OrderedFloat(s.score)))
+        .filter(|s| s.is_some_and(|s| s.is_completed(&env)))
+        .next()
         .unwrap()
         .unwrap();
 

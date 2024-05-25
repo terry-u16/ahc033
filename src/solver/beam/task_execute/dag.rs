@@ -25,7 +25,10 @@ const DEPOTS: [Coord; 16] = [
     Coord::new(4, 4),
 ];
 
-pub fn critical_path_analysis(tasks: &[Vec<SubTask>; Input::N], precalc: &Precalc) -> TaskSet {
+pub(super) fn critical_path_analysis(
+    tasks: &[Vec<SubTask>; Input::N],
+    precalc: &Precalc,
+) -> TaskSet {
     let all_tasks = tasks.iter().flatten().copied().collect_vec();
     let cranes = (0..Input::N)
         .flat_map(|i| repeat(i).take(tasks[i].len()).collect_vec())

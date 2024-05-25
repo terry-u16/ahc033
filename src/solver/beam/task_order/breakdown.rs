@@ -2,7 +2,7 @@ use crate::problem::{Grid, Input};
 
 use super::{Env, Recorder, State, SubTask};
 
-pub fn breakdown(env: &Env, state: &State) -> Result<[Vec<SubTask>; Input::N], &'static str> {
+pub(super) fn breakdown(env: &Env, state: &State) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let subtasks: SubTaskRecorder = state.simulate(env, usize::MAX)?;
     Ok(subtasks.tasks)
 }
