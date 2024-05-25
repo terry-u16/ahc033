@@ -250,20 +250,21 @@ impl State {
         depth: usize,
     ) {
         if depth == Input::N {
-            let hist_index = history.push(operations.clone(), self.history);
-            let new_state = Self::new(
+            let mut new_state = Self::new(
                 env,
                 self.task_ptr,
                 self.grid_ptr,
                 self.cranes,
                 self.board,
                 storage_flag,
-                hist_index,
+                self.history,
             );
 
             let old_score = beam[hash].map_or(f64::MAX, |s| s.score);
 
             if new_state.score < old_score {
+                let hist_index = history.push(operations.clone(), self.history);
+                new_state.history = hist_index;
                 beam[hash] = Some(new_state);
             }
 
