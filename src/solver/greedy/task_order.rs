@@ -619,6 +619,48 @@ impl Neigh for SwapStoragePos {
     }
 }
 
+struct SwapStorageAll {
+    pos0: Coord,
+    pos1: Coord,
+}
+
+impl SwapStorageAll {
+    fn gen(_state: &State, rng: &mut impl Rng) -> Option<Box<dyn Neigh>> {
+        let mut pos = STORAGES.choose_multiple(rng, 2);
+        let pos0 = *pos.next().unwrap();
+        let pos1 = *pos.next().unwrap();
+        Some(Box::new(Self { pos0, pos1 }))
+    }
+}
+
+impl Neigh for SwapStorageAll {
+    fn neigh(&self, _env: &Env, mut state: State) -> State {
+        for tasks in state.tasks.iter_mut() {
+            for task in tasks.iter_mut() {
+                match task {
+                    TaskType::ToTemporary(_, _, to) => {
+                        if *to == self.pos0 {
+                            *to = self.pos1;
+                        } else if *to == self.pos1 {
+                            *to = self.pos0;
+                        }
+                    }
+                    TaskType::FromTemporary(_, from, _) => {
+                        if *from == self.pos0 {
+                            *from = self.pos1;
+                        } else if *from == self.pos1 {
+                            *from = self.pos0;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        state
+    }
+}
+
 struct UseStorage {
     container: Container,
     pos: Coord,
@@ -772,7 +814,7 @@ fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
         }
 
         // 変形
-        let neigh_type = rng.gen_range(0..6);
+        let neigh_type = rng.gen_range(0..7);
         let neigh = match neigh_type {
             0 => SwapAfter::gen(&state, &mut rng),
             1 => Move::gen(&state, &mut rng),
@@ -780,8 +822,9 @@ fn annealing(env: &Env, initial_solution: State, duration: f64) -> State {
             3 => SwapInCrane::gen(&state, &mut rng),
             4 => ChangeStoragePos::gen(&state, &mut rng),
             5 => SwapStoragePos::gen(&state, &mut rng),
-            //6 => UseStorage::gen(&state, &mut rng),
-            //7 => DisuseStorage::gen(&state, &mut rng),
+            6 => SwapStorageAll::gen(&state, &mut rng),
+            //7 => UseStorage::gen(&state, &mut rng),
+            //8 => DisuseStorage::gen(&state, &mut rng),
             _ => unreachable!(),
         };
         let Some(neigh) = neigh else {
