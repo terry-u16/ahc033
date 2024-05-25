@@ -1,7 +1,7 @@
 {
   "ProblemOption": {
     "ProblemName": "ahc033",
-    "TimeLimit": "00:00:05"
+    "TimeLimit": "00:00:03"
   },
   "RunnerOption": {
     "StartSeed": 0,

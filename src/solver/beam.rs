@@ -34,10 +34,6 @@ impl Solver for BeamSolver {
 
         let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
 
-        for t in subtasks.iter() {
-            eprintln!("{:?}", t);
-        }
-
         let operations = task_execute::execute(input, &precalc, &subtasks, self.max_turn)?;
         let mut yard = Yard::new(&input);
         let mut output = Output::new();
