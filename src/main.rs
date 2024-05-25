@@ -6,7 +6,7 @@ mod solver;
 
 use crate::{
     common::ChangeMinMax,
-    solver::{greedy::GreedySolver, single_crane::SingleCraneSolver, Solver},
+    solver::{beam::BeamSolver, single_crane::SingleCraneSolver, Solver},
 };
 use problem::Input;
 use rand::{Rng as _, SeedableRng};
@@ -20,7 +20,7 @@ fn main() -> Result<(), &'static str> {
     let mut best_score = best_result.score();
     let mut rng = Pcg64Mcg::from_entropy();
 
-    let solver = GreedySolver::new(rng.gen(), best_score as usize);
+    let solver = BeamSolver::new(rng.gen(), best_score as usize);
     match solver.solve(&input) {
         Ok(result) => {
             let score = result.score();

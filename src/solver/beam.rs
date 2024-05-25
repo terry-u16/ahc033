@@ -6,28 +6,27 @@ use rand_pcg::Pcg64Mcg;
 use crate::{
     common::ChangeMinMax as _,
     grid::{Coord, ADJACENTS},
-    problem::{Grid, Input, Operation, Output, Yard},
+    problem::{Grid, Input, Output, Yard},
 };
 
 use super::{Solver, SolverResult};
 
-mod task_assign;
 mod task_execute;
 mod task_gen;
 mod task_order;
 
-pub struct GreedySolver {
+pub struct BeamSolver {
     seed: u64,
     max_turn: usize,
 }
 
-impl GreedySolver {
+impl BeamSolver {
     pub fn new(seed: u64, max_turn: usize) -> Self {
         Self { seed, max_turn }
     }
 }
 
-impl Solver for GreedySolver {
+impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
         let precalc = Precalc::new();

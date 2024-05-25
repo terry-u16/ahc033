@@ -1,5 +1,5 @@
 pub mod single_crane;
-pub mod greedy;
+pub mod beam;
 
 use crate::problem::{Input, Output, Yard};
 
