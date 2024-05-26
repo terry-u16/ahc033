@@ -206,7 +206,7 @@ impl State {
 
                 // available_turn制約により1ターンは状況が変化しない可能性がある
                 // 2ターン以上状況が変化しない場合は終了
-                if no_progress >= 3 {
+                if no_progress >= 2 {
                     return Err("no progress");
                 }
             } else {
