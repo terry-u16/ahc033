@@ -1,17 +1,11 @@
-use std::fmt::Display;
-
-use proconio::input;
-
 use crate::{
     data_structures::{ConstQueue, ConstVec},
     grid::{ConstMap2d, Coord, CoordDiff},
 };
+use proconio::input;
+use std::fmt::Display;
 
 pub type Grid<T> = ConstMap2d<T, { Input::N }, { Input::N * Input::N }>;
-
-const SEQUENCE: [usize; Input::CONTAINER_COUNT] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-];
 
 #[derive(Debug, Clone)]
 pub struct Input {
@@ -109,10 +103,6 @@ impl CraneState {
         }
     }
 
-    pub const fn is_empty(&self) -> bool {
-        matches!(self, Self::Empty(_))
-    }
-
     pub const fn is_holding(&self) -> bool {
         matches!(self, Self::Holding(_, _))
     }
@@ -167,16 +157,8 @@ impl Yard {
         &self.waiting
     }
 
-    pub const fn shipped(&self) -> &[ConstVec<Container, { Input::N }>; Input::N] {
-        &self.shipped
-    }
-
     pub const fn inversions(&self) -> u32 {
         self.inversions as u32
-    }
-
-    pub const fn shipped_count(&self) -> usize {
-        self.shipped_count as usize
     }
 
     pub fn apply(&mut self, operations: &[Operation; Input::N]) -> Result<(), &'static str> {

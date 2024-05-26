@@ -1,20 +1,13 @@
 mod dag;
 
-use itertools::Itertools;
-use ordered_float::OrderedFloat;
-use rand::prelude::*;
-use std::{array, collections::VecDeque};
-
-use crate::{
-    common::ChangeMinMax as _,
-    data_structures::{History, HistoryIndex},
-    grid::{Coord, ADJACENTS},
-    problem::{Container, CraneState, Grid, Input, Operation, Yard},
-};
-
 use self::dag::TaskSet;
-
-use super::{task_gen::Task, task_order::SubTask, Precalc, StorageFlag};
+use super::{step02_order::SubTask, Precalc, StorageFlag};
+use crate::{
+    data_structures::{History, HistoryIndex},
+    grid::Coord,
+    problem::{Container, CraneState, Grid, Input, Operation},
+};
+use std::array;
 
 pub(super) fn execute(
     input: &Input,
@@ -63,7 +56,7 @@ pub(super) fn execute(
 }
 
 struct Env<'a> {
-    input: &'a Input,
+    _input: &'a Input,
     precalc: &'a Precalc,
     tasks: TaskSet,
 }
@@ -71,7 +64,7 @@ struct Env<'a> {
 impl<'a> Env<'a> {
     fn new(input: &'a Input, precalc: &'a Precalc, tasks: TaskSet) -> Self {
         Self {
-            input,
+            _input: input,
             precalc,
             tasks,
         }
@@ -146,7 +139,7 @@ impl State {
             scores[i] = env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
         }
 
-        let mut score = scores.iter().sum::<f64>().ln() * Precalc::KAPPA;
+        let score = scores.iter().sum::<f64>().ln() * Precalc::KAPPA;
 
         Self {
             task_ptr,

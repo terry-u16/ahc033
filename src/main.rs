@@ -11,11 +11,9 @@ use crate::{
 use problem::Input;
 use rand::{Rng as _, SeedableRng};
 use rand_pcg::Pcg64Mcg;
-use solver::Solver as _;
 
 fn main() -> Result<(), &'static str> {
     let input = Input::read_input();
-    let since = std::time::Instant::now();
     let mut best_result = SingleCraneSolver.solve(&input)?;
     let mut best_score = best_result.score();
     let mut rng = Pcg64Mcg::from_entropy();

@@ -4,6 +4,7 @@ pub struct ConstVec<T: Default + Copy, const N: usize> {
     top: usize,
 }
 
+#[allow(dead_code)]
 impl<T: Default + Copy, const N: usize> ConstVec<T, N> {
     pub fn new() -> Self {
         Self {
@@ -53,6 +54,7 @@ pub struct ConstQueue<T: Default + Copy, const N: usize> {
     front: usize,
 }
 
+#[allow(dead_code)]
 impl<T: Default + Copy, const N: usize> ConstQueue<T, N> {
     pub fn new(values: [T; N]) -> Self {
         Self {

@@ -13,34 +13,18 @@ const N2: usize = N * N;
 
 #[derive(Debug, Clone)]
 pub struct Task {
-    index: usize,
     container: Container,
     from: Coord,
     to: Coord,
-    is_completed: bool,
-    board: Grid<bool>,
 }
 
 impl Task {
-    pub fn new(
-        index: usize,
-        container: Container,
-        from: Coord,
-        to: Coord,
-        board: Grid<bool>,
-    ) -> Self {
+    pub fn new(container: Container, from: Coord, to: Coord) -> Self {
         Self {
-            index,
             container,
             from,
             to,
-            is_completed: false,
-            board,
         }
-    }
-
-    pub fn index(&self) -> usize {
-        self.index
     }
 
     pub fn container(&self) -> Container {
@@ -54,23 +38,11 @@ impl Task {
     pub fn to(&self) -> Coord {
         self.to
     }
-
-    pub fn is_completed(&self) -> bool {
-        self.is_completed
-    }
-
-    pub fn complete(&mut self) {
-        self.is_completed = true;
-    }
-
-    pub fn board(&self) -> &Grid<bool> {
-        &self.board
-    }
 }
 
 pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
     let (max_stock, history) = dp(input);
-    //eprintln!("max_stock: {}", max_stock);
+    eprintln!("max_stock: {}", max_stock);
 
     let mut tasks = vec![];
     let mut containers = input
@@ -108,7 +80,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
 
         if container.index() == next_shippings[to.row()] {
             next_shippings[to.row()] += 1;
-            let task = Task::new(tasks.len(), container, from, to, board.clone());
+            let task = Task::new(container, from, to);
             tasks.push(task);
         } else {
             // ベストな場所を探す
@@ -131,7 +103,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
             match best_pos {
                 Some(best_pos) => {
                     positions[container.index()] = Some(best_pos);
-                    let task = Task::new(tasks.len(), container, from, best_pos, board.clone());
+                    let task = Task::new(container, from, best_pos);
                     tasks.push(task);
                     board[best_pos] = true;
                 }
@@ -169,11 +141,9 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
             positions[container] = None;
             next_shippings[Input::get_goal(Container::new(container)).row()] += 1;
             let task = Task::new(
-                tasks.len(),
                 Container::new(container),
                 pos,
                 Input::get_goal(Container::new(container)),
-                board.clone(),
             );
             tasks.push(task);
         }
