@@ -15,7 +15,7 @@ pub(super) fn execute(
     tasks: &[Vec<SubTask>; Input::N],
     max_turn: usize,
 ) -> Result<Vec<[Operation; Input::N]>, &'static str> {
-    const BEAM_SIZE: usize = 3 * 3 * 3 * 3 * 3;
+    const BEAM_SIZE: usize = 1 << (Input::N * 2);
     let tasks = dag::critical_path_analysis(tasks, precalc);
     let env = Env::new(input, precalc, tasks);
     let mut history = History::new();
@@ -139,7 +139,7 @@ impl State {
             scores[i] = env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
         }
 
-        let score = scores.iter().sum::<f64>().ln() * Precalc::KAPPA;
+        let score = scores.iter().sum::<f64>();
 
         Self {
             task_ptr,
@@ -335,7 +335,7 @@ impl State {
                 cant_move[next][op_usize ^ 2] = true;
             }
 
-            let new_hash = hash * 3 + (next.row() + next.col()) % 3;
+            let new_hash = hash * 4 + (next.row() % 2 * 2 + next.col() % 2);
 
             self.dfs(
                 env,
