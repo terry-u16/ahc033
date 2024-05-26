@@ -28,9 +28,8 @@ impl BeamSolver {
 
 impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
-        let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
         let precalc = Precalc::new();
-        let all_tasks = task_gen::generate_tasks(input, &precalc, &mut rng)?;
+        let all_tasks = task_gen::generate_tasks(input, &precalc)?;
 
         let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
 

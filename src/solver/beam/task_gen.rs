@@ -58,11 +58,7 @@ impl Task {
     }
 }
 
-pub(super) fn generate_tasks(
-    input: &Input,
-    precalc: &Precalc,
-    rng: &mut impl Rng,
-) -> Result<Vec<Task>, &'static str> {
+pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Task>, &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
     beam[0][0].push(State::init(input));
@@ -78,9 +74,14 @@ pub(super) fn generate_tasks(
             .next();
 
         if let Some(&completed) = completed {
-            let hist = history.collect(completed.history);
-            eprintln!("turn: {}", turn);
-            todo!();
+            let tasks = history.collect(completed.history);
+            
+            for t in tasks.iter() {
+                eprintln!("{:?}", t);
+            }
+
+            eprintln!("1st beam turn: {}", turn);
+            return Ok(tasks);
         }
 
         for storage in 0..=State::STORAGE_COUNT {
@@ -98,7 +99,7 @@ pub(super) fn generate_tasks(
         }
     }
 
-    todo!();
+    panic!("failed to find solution");
 }
 
 struct Env<'a> {
@@ -356,6 +357,7 @@ impl State {
                 let score_per_turn = total_work as f32 / total_turn as f32;
                 state.crane_score_per_turn[best_crane] = score_per_turn;
                 state.crane_avail_turns[best_crane] = crane_avail_turn;
+                state.cranes[best_crane] = goal;
 
                 // historyの追加
                 let task = Task::new(best_crane as u8, container, from, goal);
@@ -398,6 +400,7 @@ impl State {
                     let drop_turn =
                         (pick_turn + 1 + move_len).max(state.container_avail_turns[temp_i]);
                     state.container_avail_turns[temp_i] = drop_turn + 2;
+                    state.cranes[best_crane] = to;
 
                     let crane_avail_turn = drop_turn + 1;
                     let total_turn = crane_avail_turn - turn;
