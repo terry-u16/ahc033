@@ -26,7 +26,7 @@ pub(super) fn order_tasks(
         state2
     };
 
-    let state = annealing::annealing(&env, state, 0.5);
+    let state = annealing::annealing(&env, state, 1.5);
 
     let since = std::time::Instant::now();
     let result: Turns = state.simulate(&env, 200)?;

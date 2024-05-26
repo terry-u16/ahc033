@@ -101,26 +101,6 @@ impl State {
         let storage_flag = env.precalc.dist_dict.get_flag(|c| board[c] > 0);
         let grid_ptr = Grid::with_default();
 
-        Self::new(
-            env,
-            task_ptr,
-            grid_ptr,
-            cranes,
-            board,
-            storage_flag,
-            history,
-        )
-    }
-
-    fn new(
-        env: &Env,
-        task_ptr: [u8; Input::N],
-        grid_ptr: Grid<u8>,
-        cranes: [CraneState; Input::N],
-        board: Grid<i8>,
-        storage_flag: StorageFlag,
-        history: HistoryIndex,
-    ) -> Self {
         let mut scores = [0.0; Input::N];
 
         for (i, &task_ptr) in task_ptr.iter().enumerate() {
@@ -141,6 +121,17 @@ impl State {
 
         let score = scores.iter().sum::<f64>();
 
+        Self::new(task_ptr, grid_ptr, cranes, board, score, history)
+    }
+
+    fn new(
+        task_ptr: [u8; Input::N],
+        grid_ptr: Grid<u8>,
+        cranes: [CraneState; Input::N],
+        board: Grid<i8>,
+        score: f64,
+        history: HistoryIndex,
+    ) -> Self {
         Self {
             task_ptr,
             grid_ptr,
@@ -224,6 +215,7 @@ impl State {
             &mut [Operation::None; Input::N],
             beam,
             storage_flag,
+            0.0,
             0,
             0,
         );
@@ -239,23 +231,23 @@ impl State {
         operations: &mut [Operation; Input::N],
         beam: &mut Vec<Option<State>>,
         storage_flag: StorageFlag,
+        score: f64,
         hash: usize,
         depth: usize,
     ) {
         if depth == Input::N {
-            let mut new_state = Self::new(
-                env,
-                self.task_ptr,
-                self.grid_ptr,
-                self.cranes,
-                self.board,
-                storage_flag,
-                self.history,
-            );
-
             let old_score = beam[hash].map_or(f64::MAX, |s| s.score);
 
-            if new_state.score < old_score {
+            if score < old_score {
+                let mut new_state = Self::new(
+                    self.task_ptr,
+                    self.grid_ptr,
+                    self.cranes,
+                    self.board,
+                    score,
+                    self.history,
+                );
+
                 let hist_index = history.push(operations.clone(), self.history);
                 new_state.history = hist_index;
                 beam[hash] = Some(new_state);
@@ -281,6 +273,7 @@ impl State {
                     operations,
                     beam,
                     storage_flag,
+                    score,
                     hash,
                     depth + 1,
                 );
@@ -335,7 +328,25 @@ impl State {
                 cant_move[next][op_usize ^ 2] = true;
             }
 
+            // ハッシュ値を更新
             let new_hash = hash * 4 + (next.row() % 2 * 2 + next.col() % 2);
+
+            // スコア
+            let new_crane = self.cranes[crane_i].coord();
+            let new_task_coord = env.tasks.tasks[self.task_ptr[crane_i] as usize].coord();
+            let edge_cost = if let (Some(c0), Some(c1)) = (new_crane, new_task_coord) {
+                let consider_container =
+                    !Input::is_large_crane(crane_i) && self.cranes[crane_i].is_holding();
+                env.precalc
+                    .dist_dict
+                    .dist(storage_flag, c0, c1, consider_container)
+                    + 1
+            } else {
+                0
+            };
+
+            let task_ptr = self.task_ptr[crane_i];
+            let score_diff = env.tasks.dp[task_ptr as usize] * env.precalc.exp_table[edge_cost];
 
             self.dfs(
                 env,
@@ -346,6 +357,7 @@ impl State {
                 operations,
                 beam,
                 storage_flag,
+                score + score_diff,
                 new_hash,
                 depth + 1,
             );
