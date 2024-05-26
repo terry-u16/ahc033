@@ -1,21 +1,16 @@
 use std::array;
 
+use super::{task_order::SubTask, DistDict, Precalc};
 use crate::{
     common::ChangeMinMax as _,
     data_structures::{History, HistoryIndex},
     grid::Coord,
     problem::{Container, Grid, Input},
 };
-use itertools::{iproduct, Itertools};
+use itertools::Itertools;
 use rand::prelude::*;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
-
-use super::{DistDict, Precalc};
-
-const N: usize = Input::N;
-const NP1: usize = N + 1;
-const N2: usize = N * N;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Task {
@@ -59,36 +54,51 @@ impl Task {
     }
 }
 
-pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Task>, &'static str> {
+pub(super) fn generate_tasks(
+    input: &Input,
+    precalc: &Precalc,
+) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
+    let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
     beam[0][0].push(State::init(input));
     let mut history = History::new();
     const BEAM_WIDTH: usize = 3000;
     let mut rng = Pcg64Mcg::from_entropy();
 
     for turn in 0.. {
-        let completed = beam
-            .iter()
-            .flatten()
-            .flatten()
-            .filter(|s| s.is_completed())
-            .next();
-
-        if let Some(&completed) = completed {
+        if let Some(completed) = completed_list[turn as usize] {
             let tasks = history.collect(completed.history);
 
             for t in tasks.iter() {
                 eprintln!("{:?}", t);
             }
 
+            eprintln!("{}", completed.score);
+            eprintln!("{:?}", completed.crane_score_per_turn);
+            eprintln!("{:?}", completed.crane_avail_turns);
             eprintln!("1st beam turn: {}", turn);
-            return Ok(tasks);
+            return Ok(to_subtasks(&tasks));
         }
 
         for storage in 0..=State::STORAGE_COUNT {
             let mut b = vec![];
             std::mem::swap(&mut b, &mut beam[turn as usize][storage as usize]);
+
+            for state in b.iter() {
+                if state.is_completed() {
+                    let t = *state
+                        .crane_avail_turns
+                        .iter()
+                        .filter(|&&t| t < u8::MAX)
+                        .max()
+                        .unwrap() as usize;
+
+                    if completed_list[t].is_none() {
+                        completed_list[t] = Some(*state);
+                    }
+                }
+            }
 
             if b.len() > BEAM_WIDTH {
                 b.select_nth_unstable(BEAM_WIDTH);
@@ -102,6 +112,26 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
     }
 
     panic!("failed to find solution");
+}
+
+fn to_subtasks(tasks: &[Task]) -> [Vec<SubTask>; Input::N] {
+    let mut subtasks = array::from_fn(|_| vec![]);
+    let mut indices = Grid::new([0; Input::N * Input::N]);
+
+    for t in tasks.iter() {
+        let index = indices[t.from];
+        subtasks[t.crane()].push(SubTask::Pick(t.from, index));
+        indices[t.from] += 1;
+        let index = indices[t.to];
+        subtasks[t.crane()].push(SubTask::Drop(t.to, index));
+        indices[t.to] += 1;
+    }
+
+    for i in 0..Input::N {
+        subtasks[i].push(SubTask::EndOfOrder);
+    }
+
+    subtasks
 }
 
 struct Env<'a> {
@@ -330,7 +360,7 @@ impl State {
             // pickを開始するターン
             let move_len = env.dist_dict.dist(storage_flag, crane_pos, from, false) as u8;
             let pick_turn = (turn + move_len).max(state.container_avail_turns[container_i]);
-            state.container_avail_turns[container_i] = turn + 2;
+            state.container_avail_turns[container_i] = pick_turn + 2;
 
             // pick_work: Pickの有効作業量。一時保管場所からのPickは無駄な作業なので0
             let pick_work = if container_i < Input::N {

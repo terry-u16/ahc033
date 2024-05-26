@@ -29,9 +29,9 @@ impl BeamSolver {
 impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let precalc = Precalc::new();
-        let all_tasks = task_gen::generate_tasks(input, &precalc)?;
+        let subtasks = task_gen::generate_tasks(input, &precalc)?;
 
-        let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
+        //let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
 
         let operations = task_execute::execute(input, &precalc, &subtasks, self.max_turn)?;
         let mut yard = Yard::new(&input);
