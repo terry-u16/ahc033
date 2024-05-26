@@ -15,7 +15,7 @@ pub(super) fn execute(
     tasks: &[Vec<SubTask>; Input::N],
     max_turn: usize,
 ) -> Result<Vec<[Operation; Input::N]>, &'static str> {
-    const BEAM_SIZE: usize = 1 << (Input::N * 2);
+    const BEAM_SIZE: usize = (1 << (Input::N * 2)) * 3;
     let tasks = dag::critical_path_analysis(tasks, precalc);
     let env = Env::new(input, precalc, tasks);
     let mut history = History::new();
@@ -255,6 +255,7 @@ impl State {
             0.0,
             0,
             0,
+            0,
         );
     }
 
@@ -270,9 +271,11 @@ impl State {
         storage_flag: StorageFlag,
         score: f64,
         hash: usize,
+        row_col_sum: usize,
         depth: usize,
     ) {
         if depth == Input::N {
+            let hash = hash * 3 + row_col_sum % 3;
             let old_score = beam[hash].map_or(f64::MAX, |s| s.score);
 
             if score < old_score {
@@ -312,6 +315,7 @@ impl State {
                     storage_flag,
                     score,
                     hash,
+                    row_col_sum,
                     depth + 1,
                 );
 
@@ -367,6 +371,7 @@ impl State {
 
             // ハッシュ値を更新
             let new_hash = hash * 4 + (next.row() % 2 * 2 + next.col() % 2);
+            let new_row_col_sum = row_col_sum + next.row() + next.col();
 
             // スコア
             let new_crane = self.cranes[crane_i].coord();
@@ -396,6 +401,7 @@ impl State {
                 storage_flag,
                 score + score_diff,
                 new_hash,
+                new_row_col_sum,
                 depth + 1,
             );
 

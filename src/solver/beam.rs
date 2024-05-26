@@ -34,7 +34,9 @@ impl Solver for BeamSolver {
 
         let subtasks = step02_order::order_tasks(input, &precalc, &all_tasks)?;
 
+        let since = std::time::Instant::now();
         let operations = step03_execute::execute(input, &precalc, &subtasks, self.max_turn)?;
+        eprintln!("elapsed: {:?}", since.elapsed());
         let mut yard = Yard::new(&input);
         let mut output = Output::new();
 
