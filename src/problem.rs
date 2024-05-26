@@ -372,6 +372,7 @@ impl Display for Output {
 #[derive(Debug, Clone, Copy)]
 pub struct Params {
     kappa_step02: f64,
+    kappa_step02_best: f64,
     kappa_step03: f64,
     temp0: f64,
     temp1: f64,
@@ -384,45 +385,50 @@ impl Params {
         let kappa_step02 = args
             .get(1)
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0.3822671614215993);
-        let kappa_step03 = args
+            .unwrap_or(0.36695712599458363);
+        let kappa_step02_best = args
             .get(2)
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0.7071420688292552);
-        let temp0 = args
+            .unwrap_or(0.33853359719806914);
+        let kappa_step03 = args
             .get(3)
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0.33718746348111384);
-        let temp1 = args
+            .unwrap_or(1.0943382134137645);
+        let temp0 = args
             .get(4)
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0.23799416640806573);
+            .unwrap_or(0.26427465765573904);
+        let temp1 = args
+            .get(5)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.2348013030504484);
         let neigh_weight = [
-            args.get(5)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0.44383794066716115),
             args.get(6)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.0020780212528406206),
+                .unwrap_or(0.8001974732395251),
             args.get(7)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.041213836417613614),
+                .unwrap_or(0.0021234186564319402),
             args.get(8)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.009147302082224574),
+                .unwrap_or(0.07794107305552037),
             args.get(9)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.02070058170148708),
+                .unwrap_or(0.061893395349745486),
             args.get(10)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.01277049200335966),
+                .unwrap_or(0.03785676941674077),
             args.get(11)
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(0.014255297960146098),
+                .unwrap_or(0.02113742827777307),
+            args.get(12)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.005224236584165685),
         ];
 
         Self {
             kappa_step02,
+            kappa_step02_best,
             kappa_step03,
             temp0,
             temp1,
@@ -432,6 +438,10 @@ impl Params {
 
     pub fn kappa_step02(&self) -> f64 {
         self.kappa_step02
+    }
+
+    pub fn kappa_step02_best(&self) -> f64 {
+        self.kappa_step02_best
     }
 
     pub fn kappa_step03(&self) -> f64 {

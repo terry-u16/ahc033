@@ -95,6 +95,11 @@ impl State {
         Ok(turns.calc_score(env))
     }
 
+    fn calc_score_best_state(&self, env: &Env, max_turn: usize) -> Result<f64, &'static str> {
+        let turns: Turns = self.simulate(env, max_turn)?;
+        Ok(turns.calc_score_best_state(env))
+    }
+
     fn simulate<T: Recorder>(&self, env: &Env, max_turn: usize) -> Result<T, &'static str> {
         let mut recorder = T::new();
         let mut in_ptr = [0; Input::N];
@@ -263,6 +268,19 @@ impl Turns {
     fn calc_score(&self, env: &Env) -> f64 {
         // logsumexp
         let kappa = env.input.params().kappa_step02();
+        let logsumexp = self
+            .turns
+            .iter()
+            .map(|&t| (t as f64 / kappa).exp())
+            .sum::<f64>()
+            .ln()
+            * kappa;
+        logsumexp
+    }
+
+    fn calc_score_best_state(&self, env: &Env) -> f64 {
+        // logsumexp
+        let kappa = env.input.params().kappa_step02_best();
         let logsumexp = self
             .turns
             .iter()

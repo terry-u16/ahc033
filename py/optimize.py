@@ -15,10 +15,11 @@ class Objective:
         pass
 
     def __call__(self, trial: optuna.trial.Trial) -> float:
-        k2 = trial.suggest_float("k2", 0.2, 10.0, log=True)
-        k3 = trial.suggest_float("k3", 0.2, 10.0, log=True)
+        k2 = trial.suggest_float("k2", 0.3, 10.0, log=True)
+        k2_best = trial.suggest_float("k2_best", 0.3, 10.0, log=True)
+        k3 = trial.suggest_float("k3", 0.3, 10.0, log=True)
         temp0 = trial.suggest_float("temp0", 1e-1, 1e1, log=True)
-        temp1 = trial.suggest_float("temp1", 1e-2, 3e-1, log=True)
+        temp1 = trial.suggest_float("temp1", 1e-2, temp0, log=True)
         neigh0 = trial.suggest_float("neigh0", 1e-3, 1e0, log=True)
         neigh1 = trial.suggest_float("neigh1", 1e-3, 1e0, log=True)
         neigh2 = trial.suggest_float("neigh2", 1e-3, 1e0, log=True)
@@ -28,11 +29,11 @@ class Objective:
         neigh6 = trial.suggest_float("neigh6", 1e-3, 1e0, log=True)
 
         min_seed = 0
-        max_seed = 511
+        max_seed = 1023
         batch_size = 16
         score_sum = 0.0
         seed_sum = 0
-        args = f"{k2} {k3} {temp0} {temp1} {neigh0} {neigh1} {neigh2} {neigh3} {neigh4} {neigh5} {neigh6}"
+        args = f"{k2} {k2_best} {k3} {temp0} {temp1} {neigh0} {neigh1} {neigh2} {neigh3} {neigh4} {neigh5} {neigh6}"
         local_execution = f"ahc033.exe {args}"
         cloud_execution = f"ahc033 {args}"
 
@@ -84,7 +85,7 @@ class Objective:
                     #    score = math.log10(10.00)
                     instance_score_sum += score
 
-            trial.report(instance_score_sum, instance_id)
+            trial.report(instance_score_sum / batch_size, instance_id)
             score_sum += instance_score_sum
             print(f"{score_sum / seed_sum:.3f}", end=" ", flush=True)
 
@@ -98,7 +99,7 @@ class Objective:
 
 
 if __name__ == "__main__":
-    STUDY_NAME = "ahc033-001"
+    STUDY_NAME = "ahc033-005"
 
     # subprocess.run("dotnet marathon compile-rust")
     subprocess.run("cargo build --release", shell=True)
@@ -117,7 +118,8 @@ if __name__ == "__main__":
     if len(study.trials) == 0:
         study.enqueue_trial(
             {
-                "k2": 3.0,
+                "k2": 1.0,
+                "k2_best": 1.0,
                 "k3": 1.0,
                 "temp0": 1e0,
                 "temp1": 1e-1,
@@ -131,7 +133,7 @@ if __name__ == "__main__":
             }
         )
 
-    study.optimize(objective, timeout=3000)
+    study.optimize(objective, timeout=3600 * 6)
     print(study.best_trial)
 
     optuna.visualization.plot_param_importances(study).show()

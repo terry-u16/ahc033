@@ -3,6 +3,7 @@ use crate::{
     common::ChangeMinMax as _,
     grid::Coord,
     problem::{Container, Input},
+    solver::beam::step02_order::Turns,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -21,8 +22,8 @@ pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> St
     let mut state = initial_solution;
     let mut best_state = state.clone();
     let mut current_score = state.calc_score(env, usize::MAX).unwrap();
-    let mut best_score = current_score;
-    let init_score = current_score;
+    let mut best_score = state.calc_score_best_state(env, usize::MAX).unwrap();
+    let init_score = best_score;
 
     let mut all_iter = 0;
     let mut valid_iter = 0;
@@ -69,9 +70,10 @@ pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> St
 
         // スコア計算
         let threshold = current_score - temp * rng.gen_range(0.0f64..1.0).ln();
-        let Ok(new_score) = new_state.calc_score(env, threshold as usize) else {
+        let Ok(turns) = new_state.simulate::<Turns>(env, threshold as usize) else {
             continue;
         };
+        let new_score = turns.calc_score(env);
 
         if new_score <= threshold {
             // 解の更新
@@ -79,7 +81,7 @@ pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> St
             accepted_count += 1;
             state = new_state;
 
-            if best_score.change_min(current_score) {
+            if best_score.change_min(turns.calc_score_best_state(env)) {
                 best_state = state.clone();
                 update_count += 1;
             }
