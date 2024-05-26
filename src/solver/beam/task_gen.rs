@@ -1,5 +1,8 @@
+use std::array;
+
 use crate::{
     common::ChangeMinMax as _,
+    data_structures::{History, HistoryIndex},
     grid::Coord,
     problem::{Container, Grid, Input},
 };
@@ -11,36 +14,33 @@ const N: usize = Input::N;
 const NP1: usize = N + 1;
 const N2: usize = N * N;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Task {
-    index: usize,
+    crane: u8,
     container: Container,
     from: Coord,
     to: Coord,
-    is_completed: bool,
-    board: Grid<bool>,
 }
 
 impl Task {
-    pub fn new(
-        index: usize,
-        container: Container,
-        from: Coord,
-        to: Coord,
-        board: Grid<bool>,
-    ) -> Self {
+    const DUMMY: Self = Self {
+        crane: !0,
+        container: Container::new(!0),
+        from: Coord::new(!0, !0),
+        to: Coord::new(!0, !0),
+    };
+
+    const fn new(crane: u8, container: Container, from: Coord, to: Coord) -> Self {
         Self {
-            index,
+            crane,
             container,
             from,
             to,
-            is_completed: false,
-            board,
         }
     }
 
-    pub fn index(&self) -> usize {
-        self.index
+    pub fn crane(&self) -> usize {
+        self.crane as usize
     }
 
     pub fn container(&self) -> Container {
@@ -54,209 +54,358 @@ impl Task {
     pub fn to(&self) -> Coord {
         self.to
     }
-
-    pub fn is_completed(&self) -> bool {
-        self.is_completed
-    }
-
-    pub fn complete(&mut self) {
-        self.is_completed = true;
-    }
-
-    pub fn board(&self) -> &Grid<bool> {
-        &self.board
-    }
 }
 
 pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
-    let (max_stock, history) = dp(input);
-    //eprintln!("max_stock: {}", max_stock);
+    let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
+    beam[0][0].push(State::init(input));
+    let mut history = History::new();
+    const BEAM_WIDTH: usize = 3000;
 
-    let mut tasks = vec![];
-    let mut containers = input
-        .containers()
-        .map(|c| c.iter().copied().rev().collect_vec());
+    for turn in 0.. {
+        let completed = beam
+            .iter()
+            .flatten()
+            .flatten()
+            .filter(|s| s.is_completed())
+            .next();
 
-    let mut storages = [
-        Coord::new(0, 3),
-        Coord::new(2, 3),
-        Coord::new(4, 3),
+        if let Some(&completed) = completed {
+            let hist = history.collect(completed.history);
+            eprintln!("turn: {}", turn);
+            todo!();
+        }
+
+        for storage in 0..=State::STORAGE_COUNT {
+            let mut b = vec![];
+            std::mem::swap(&mut b, &mut beam[turn as usize][storage as usize]);
+
+            if b.len() > BEAM_WIDTH {
+                b.select_nth_unstable(BEAM_WIDTH);
+                b.truncate(BEAM_WIDTH);
+            }
+
+            for state in b.iter_mut() {
+                state.gen_next(input, &mut beam, &mut history);
+            }
+        }
+    }
+
+    todo!();
+}
+
+#[derive(Debug, Clone, Copy)]
+struct State {
+    in_ptr: [u8; Input::N],
+    container_avail_turns: [u8; Input::N + Self::STORAGE_COUNT],
+    containers: [Option<Container>; Input::N + Self::STORAGE_COUNT],
+    cranes: [Coord; Input::N],
+    out_next: [u8; Input::N],
+    out_avail_turns: [u8; Input::N],
+    crane_avail_turns: [u8; Input::N],
+    crane_score_per_turn: [f32; Input::N],
+    temp_count: u8,
+    finished_container_count: u8,
+    score: f32,
+    history: HistoryIndex,
+}
+
+impl State {
+    const STORAGE_COUNT: usize = 6;
+    const POS: [Coord; Input::N * 2 + Self::STORAGE_COUNT] = [
+        // 搬入口
+        Coord::new(0, 0),
+        Coord::new(1, 0),
+        Coord::new(2, 0),
+        Coord::new(3, 0),
+        Coord::new(4, 0),
+        // 一時保管
         Coord::new(0, 2),
         Coord::new(2, 2),
         Coord::new(4, 2),
+        Coord::new(0, 3),
+        Coord::new(2, 3),
+        Coord::new(4, 3),
+        // 搬出口
+        Coord::new(0, 4),
+        Coord::new(1, 4),
+        Coord::new(2, 4),
+        Coord::new(3, 4),
+        Coord::new(4, 4),
     ];
+    const CRANE_AVAIL: u8 = u8::MAX;
 
-    let mut board = Grid::new([false; Input::CONTAINER_COUNT]);
-    board[Coord::new(0, 0)] = true;
-    board[Coord::new(1, 0)] = true;
-    board[Coord::new(2, 0)] = true;
-    board[Coord::new(3, 0)] = true;
-    board[Coord::new(4, 0)] = true;
-
-    let mut positions = [None; Input::CONTAINER_COUNT];
-    let mut next_shippings = [0, 5, 10, 15, 20];
-
-    for &row in history.iter() {
-        let container = containers[row].pop().unwrap();
-        let from = Coord::new(row, 0);
-        let to = Input::get_goal(container);
-
-        // 搬入口クリア
-        if containers[row].is_empty() {
-            board[from] = false;
+    fn init(input: &Input) -> Self {
+        let mut containers = [None; Input::N + Self::STORAGE_COUNT];
+        for i in 0..Input::N {
+            containers[i] = Some(input.containers()[i][0]);
         }
 
-        if container.index() == next_shippings[to.row()] {
-            next_shippings[to.row()] += 1;
-            let task = Task::new(tasks.len(), container, from, to, board.clone());
-            tasks.push(task);
-        } else {
-            // ベストな場所を探す
-            let mut best_pos = None;
-            let mut best_cost = usize::MAX;
-            storages.shuffle(rng);
+        Self {
+            in_ptr: [0; Input::N],
+            container_avail_turns: [0; Input::N + Self::STORAGE_COUNT],
+            containers,
+            temp_count: 0,
+            finished_container_count: 0,
+            cranes: array::from_fn(|i| Coord::new(i, 0)),
+            out_next: [0, 5, 10, 15, 20],
+            out_avail_turns: [0; Input::N],
+            crane_avail_turns: [0; Input::N],
+            crane_score_per_turn: [0.0; Input::N],
+            score: 0.0,
+            history: HistoryIndex::ROOT,
+        }
+    }
 
-            for &cand in storages.iter() {
-                if board[cand] {
-                    continue;
-                }
+    fn is_completed(&self) -> bool {
+        self.finished_container_count == Input::CONTAINER_COUNT as u8
+    }
 
-                let cost = from.dist(&cand) + cand.dist(&to);
+    fn gen_next(
+        &mut self,
+        input: &Input,
+        beam: &mut Vec<Vec<Vec<Self>>>,
+        history: &mut History<Task>,
+    ) {
+        let mut container_counts = [0; Input::N + Self::STORAGE_COUNT];
+        let mut container_suffix_sum = [0; Input::N + Self::STORAGE_COUNT];
 
-                if best_cost.change_min(cost) {
-                    best_pos = Some(cand);
+        for i in 0..Input::N {
+            container_counts[i] = Input::N - self.in_ptr[i] as usize;
+        }
+
+        for i in Input::N..Input::N + Self::STORAGE_COUNT {
+            container_counts[i] = self.containers[i].is_some() as usize;
+        }
+
+        container_suffix_sum[Input::N + Self::STORAGE_COUNT - 1] =
+            container_counts[Input::N + Self::STORAGE_COUNT - 1];
+
+        for i in (0..Input::N + Self::STORAGE_COUNT - 1).rev() {
+            container_suffix_sum[i] = container_suffix_sum[i + 1] + container_counts[i];
+        }
+
+        let turn = self.crane_avail_turns.iter().copied().min().unwrap();
+        let mut available_crane_count = 0;
+
+        for (c, t) in self
+            .crane_avail_turns
+            .iter_mut()
+            .zip(self.crane_score_per_turn.iter_mut())
+        {
+            if *c == turn {
+                *c = Self::CRANE_AVAIL;
+                *t = 0.0;
+                available_crane_count += 1;
+            }
+        }
+
+        // コンテナ数とクレーン数の小さい方の数だけ操作を割り付ける必要がある
+        let remaining = container_suffix_sum[0].min(available_crane_count);
+
+        let mut state = *self;
+        state.dfs(
+            input,
+            beam,
+            history,
+            &container_suffix_sum,
+            turn,
+            0,
+            remaining,
+        );
+    }
+
+    fn dfs(
+        &mut self,
+        input: &Input,
+        beam: &mut Vec<Vec<Vec<Self>>>,
+        history: &mut History<Task>,
+        container_suffix_sum: &[usize; Input::N + Self::STORAGE_COUNT],
+        turn: u8,
+        search_i: usize,
+        remaining: usize,
+    ) {
+        if remaining == 0 {
+            let next_turn = self.crane_avail_turns.iter().copied().min().unwrap();
+            let score_per_turn = self.crane_score_per_turn.iter().copied().sum::<f32>();
+            assert!(next_turn > turn);
+
+            for t in self.crane_avail_turns.iter_mut() {
+                if *t == Self::CRANE_AVAIL {
+                    *t = next_turn;
                 }
             }
 
-            match best_pos {
-                Some(best_pos) => {
-                    positions[container.index()] = Some(best_pos);
-                    let task = Task::new(tasks.len(), container, from, best_pos, board.clone());
-                    tasks.push(task);
-                    board[best_pos] = true;
-                }
-                None => {
-                    return Err("storage positions are occupied");
-                }
-            }
+            self.score += score_per_turn * (next_turn - turn) as f32;
+            beam[next_turn as usize][self.temp_count as usize].push(*self);
+            return;
         }
 
-        loop {
-            let mut next = None;
-            const ORDER: [usize; 25] = [
-                0, 5, 10, 15, 20, 1, 6, 11, 16, 21, 2, 7, 12, 17, 22, 3, 8, 13, 18, 23, 4, 9, 14,
-                19, 24,
-            ];
-
-            for &container in ORDER.iter() {
-                let Some(pos) = positions[container] else {
-                    continue;
-                };
-
-                if next_shippings[Input::get_goal(Container::new(container)).row()] != container {
-                    continue;
-                }
-
-                next = Some((container, pos));
+        for container_i in search_i..Input::N + Self::STORAGE_COUNT {
+            if container_suffix_sum[container_i] < remaining {
                 break;
             }
 
-            let Some((container, pos)) = next else {
-                break;
+            let Some(container) = self.containers[container_i] else {
+                continue;
             };
 
-            board[pos] = false;
-            positions[container] = None;
-            next_shippings[Input::get_goal(Container::new(container)).row()] += 1;
-            let task = Task::new(
-                tasks.len(),
-                Container::new(container),
-                pos,
-                Input::get_goal(Container::new(container)),
-                board.clone(),
-            );
-            tasks.push(task);
-        }
-    }
+            let from = Self::POS[container_i];
+            let goal = Input::get_goal(container);
 
-    Ok(tasks)
-}
+            let to_out = self.out_next[goal.row()] == container.index() as u8;
+            let to_temp = container_i < Input::N && self.temp_count < Self::STORAGE_COUNT as u8;
 
-/// 滞留コンテナ数の最大値を最小にするDPを行い、搬入順（何番目にどの行から搬入するか）を返す
-fn dp(input: &Input) -> (u128, Vec<usize>) {
-    let mut counts = vec![vec![vec![vec![vec![0; NP1]; NP1]; NP1]; NP1]; NP1];
-
-    for i0 in 0..NP1 {
-        for i1 in 0..NP1 {
-            for i2 in 0..NP1 {
-                for i3 in 0..NP1 {
-                    for i4 in 0..NP1 {
-                        let indices = [i0, i1, i2, i3, i4];
-                        counts[i0][i1][i2][i3][i4] = count(input, indices);
-                    }
-                }
-            }
-        }
-    }
-
-    let mut dp = vec![vec![vec![vec![vec![u128::MAX / 2; NP1]; NP1]; NP1]; NP1]; NP1];
-    dp[0][0][0][0][0] = 0;
-
-    let mut from = vec![vec![vec![vec![vec![([0; N], 0); NP1]; NP1]; NP1]; NP1]; NP1];
-
-    for (i0, i1, i2, i3, i4) in iproduct!(0..NP1, 0..NP1, 0..NP1, 0..NP1, 0..NP1) {
-        let old_indices = [i0, i1, i2, i3, i4];
-        let current_dp = dp[i0][i1][i2][i3][i4];
-        let current_cnt = counts[i0][i1][i2][i3][i4];
-
-        for idx in 0..N {
-            let mut indices = old_indices;
-            indices[idx] += 1;
-
-            if indices[idx] > N {
+            if !to_out && !to_temp {
                 continue;
             }
 
-            let cnt = counts[indices[0]][indices[1]][indices[2]][indices[3]][indices[4]];
-            let new_cnt = current_cnt.max(cnt);
-            let cost = current_dp + (1 << (new_cnt * 4));
+            // craneのアサイン
+            let mut best_crane = !0;
+            let mut best_dist = usize::MAX;
 
-            if dp[indices[0]][indices[1]][indices[2]][indices[3]][indices[4]].change_min(cost) {
-                from[indices[0]][indices[1]][indices[2]][indices[3]][indices[4]] =
-                    (old_indices, idx);
+            for (crane, (&t, &c)) in self
+                .crane_avail_turns
+                .iter()
+                .zip(self.cranes.iter())
+                .enumerate()
+            {
+                if t == Self::CRANE_AVAIL && best_dist.change_min(c.dist(&from)) {
+                    best_crane = crane;
+                }
+            }
+
+            let crane_pos = self.cranes[best_crane];
+
+            // in側の更新
+            let mut state = *self;
+
+            // pickを開始するターン
+            let pick_turn =
+                (turn + crane_pos.dist(&from) as u8).max(state.container_avail_turns[container_i]);
+            state.container_avail_turns[container_i] = turn + 2;
+
+            // pick_work: Pickの有効作業量。一時保管場所からのPickは無駄な作業なので0
+            let pick_work = if container_i < Input::N {
+                let in_ptr = &mut state.in_ptr[container_i];
+                *in_ptr += 1;
+                state.containers[container_i] = input.containers()[container_i]
+                    .get(*in_ptr as usize)
+                    .copied();
+                1
+            } else {
+                state.containers[container_i] = None;
+                state.temp_count -= 1;
+                0
+            };
+
+            // クレーンの戻り距離に応じた仕事量
+            // 左方向の移動は作業に貢献しており、それ以外の移動は貢献していないと見なす
+            let crane_back_work = crane_pos.col().saturating_sub(from.col()) as i32;
+
+            // out側の更新
+            if to_out {
+                // そのまま搬出
+                state.out_next[goal.row()] += 1;
+                state.finished_container_count += 1;
+
+                let dist = from.dist(&goal);
+                let prev_potential = dist as i32;
+
+                // クレーンの左移動 + Pick + ゴールまでの移動 + Dropが仕事量
+                let total_work = crane_back_work + pick_work + prev_potential + 1;
+
+                // dropが開始するターン
+                let drop_turn = (pick_turn + 1 + dist as u8).max(state.out_avail_turns[goal.row()]);
+                state.out_avail_turns[goal.row()] = drop_turn + 2;
+
+                // クレーンが使用可能になるターン
+                let crane_avail_turn = drop_turn + 1;
+                let total_turn = crane_avail_turn - turn;
+                let score_per_turn = total_work as f32 / total_turn as f32;
+                state.crane_score_per_turn[best_crane] = score_per_turn;
+                state.crane_avail_turns[best_crane] = crane_avail_turn;
+
+                // historyの追加
+                let task = Task::new(best_crane as u8, container, from, goal);
+                state.history = history.push(task, state.history);
+                state.dfs(
+                    input,
+                    beam,
+                    history,
+                    container_suffix_sum,
+                    turn,
+                    container_i,
+                    remaining - 1,
+                );
+            } else {
+                // 一時保管場所に運ぶ
+                let mut candidates = (Input::N..Self::STORAGE_COUNT + Input::N)
+                    .filter(|&i| state.containers[i].is_none())
+                    .collect_vec();
+                candidates.sort_unstable_by_key(|&i| from.dist(&Self::POS[i]));
+                const TAKE_COUNT: usize = 3;
+                state.temp_count += 1;
+
+                for &temp_i in candidates.iter().take(TAKE_COUNT) {
+                    let mut state = state;
+                    state.containers[temp_i] = Some(container);
+                    let to = Self::POS[temp_i];
+                    let dist = from.dist(&to);
+                    let prev_potential = from.dist(&goal) as i32;
+                    let new_potential = to.dist(&goal) as i32;
+                    let potential_diff = prev_potential - new_potential;
+
+                    // クレーンの左移動 + Pick + ゴールまでの移動 + Dropが仕事量
+                    // potential_diffが負になること、一時保管場所にDropする操作は進捗を生まないことに注意
+                    let total_work = crane_back_work + pick_work + potential_diff;
+                    let drop_turn =
+                        (pick_turn + 1 + dist as u8).max(state.container_avail_turns[temp_i]);
+                    state.container_avail_turns[temp_i] = drop_turn + 2;
+
+                    let crane_avail_turn = drop_turn + 1;
+                    let total_turn = crane_avail_turn - turn;
+                    let score_per_turn = total_work as f32 / total_turn as f32;
+                    state.crane_score_per_turn[best_crane] = score_per_turn;
+                    state.crane_avail_turns[best_crane] = crane_avail_turn;
+
+                    // historyの追加
+                    let task = Task::new(best_crane as u8, container, from, to);
+                    state.history = history.push(task, state.history);
+                    state.dfs(
+                        input,
+                        beam,
+                        history,
+                        container_suffix_sum,
+                        turn,
+                        container_i,
+                        remaining - 1,
+                    );
+                }
             }
         }
     }
-
-    let mut current = [N; N];
-    let mut history = vec![];
-
-    while current != [0; N] {
-        let (prev, index) = from[current[0]][current[1]][current[2]][current[3]][current[4]];
-        history.push(index);
-        current = prev;
-    }
-
-    history.reverse();
-
-    (dp[N][N][N][N][N], history)
 }
 
-fn count(input: &Input, indices: [usize; N]) -> u32 {
-    let mut contains = [false; N2];
-
-    for (i, &c) in indices.iter().enumerate() {
-        for &c in input.containers()[i][..c].iter() {
-            contains[c.index()] = true;
-        }
+impl PartialEq for State {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score
     }
+}
 
-    let mut count = indices.iter().map(|&i| i as u32).sum::<u32>();
+impl Eq for State {}
 
-    for i in 0..N {
-        let slice = &contains[i * N..(i + 1) * N];
-        count -= slice.iter().take_while(|&&b| b).count() as u32;
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
+}
 
-    count
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // 浮動小数点数の比較は誤差を考慮する
+        let a = (self.score * 100.0).round() as i32;
+        let b = (other.score * 100.0).round() as i32;
+        a.cmp(&b).reverse()
+    }
 }
