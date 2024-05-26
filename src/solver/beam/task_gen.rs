@@ -9,6 +9,7 @@ use crate::{
 use itertools::{iproduct, Itertools};
 use rand::prelude::*;
 use rand::Rng;
+use rand_pcg::Pcg64Mcg;
 
 use super::{DistDict, Precalc};
 
@@ -64,6 +65,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
     beam[0][0].push(State::init(input));
     let mut history = History::new();
     const BEAM_WIDTH: usize = 3000;
+    let mut rng = Pcg64Mcg::from_entropy();
 
     for turn in 0.. {
         let completed = beam
@@ -75,7 +77,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
 
         if let Some(&completed) = completed {
             let tasks = history.collect(completed.history);
-            
+
             for t in tasks.iter() {
                 eprintln!("{:?}", t);
             }
@@ -94,7 +96,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
             }
 
             for state in b.iter_mut() {
-                state.gen_next(&env, &mut beam, &mut history);
+                state.gen_next(&env, &mut beam, &mut history, &mut rng);
             }
         }
     }
@@ -142,6 +144,14 @@ struct State {
 
 impl State {
     const STORAGE_COUNT: usize = 6;
+    const STORAGES: [Coord; Self::STORAGE_COUNT] = [
+        Coord::new(0, 2),
+        Coord::new(2, 2),
+        Coord::new(4, 2),
+        Coord::new(0, 3),
+        Coord::new(2, 3),
+        Coord::new(4, 3),
+    ];
     const POS: [Coord; Input::N * 2 + Self::STORAGE_COUNT] = [
         // 搬入口
         Coord::new(0, 0),
@@ -191,7 +201,13 @@ impl State {
         self.finished_container_count == Input::CONTAINER_COUNT as u8
     }
 
-    fn gen_next(&mut self, env: &Env, beam: &mut Vec<Vec<Vec<Self>>>, history: &mut History<Task>) {
+    fn gen_next(
+        &mut self,
+        env: &Env,
+        beam: &mut Vec<Vec<Vec<Self>>>,
+        history: &mut History<Task>,
+        rng: &mut impl Rng,
+    ) {
         let mut container_counts = [0; Input::N + Self::STORAGE_COUNT];
         let mut container_suffix_sum = [0; Input::N + Self::STORAGE_COUNT];
 
@@ -237,6 +253,7 @@ impl State {
             turn,
             0,
             remaining,
+            rng,
         );
     }
 
@@ -249,6 +266,7 @@ impl State {
         turn: u8,
         search_i: usize,
         remaining: usize,
+        rng: &mut impl Rng,
     ) {
         if remaining == 0 {
             let next_turn = self.crane_avail_turns.iter().copied().min().unwrap();
@@ -301,6 +319,7 @@ impl State {
             }
 
             let crane_pos = self.cranes[best_crane];
+            let consider_container = !Input::is_large_crane(best_crane);
 
             // in側の更新
             let mut state = *self;
@@ -344,10 +363,10 @@ impl State {
                 let total_work = crane_back_work + pick_work + prev_potential + 1;
 
                 // dropが開始するターン
-                let move_len =
-                    env.dist_dict
-                        .dist(storage_flag, from, goal, !Input::is_large_crane(best_crane))
-                        as u8;
+                let move_len = env
+                    .dist_dict
+                    .dist(storage_flag, from, goal, consider_container)
+                    as u8;
                 let drop_turn = (pick_turn + 1 + move_len).max(state.out_avail_turns[goal.row()]);
                 state.out_avail_turns[goal.row()] = drop_turn + 2;
 
@@ -370,13 +389,20 @@ impl State {
                     turn,
                     container_i,
                     remaining - 1,
+                    rng,
                 );
             } else {
                 // 一時保管場所に運ぶ
                 let mut candidates = (Input::N..Self::STORAGE_COUNT + Input::N)
                     .filter(|&i| state.containers[i].is_none())
                     .collect_vec();
-                candidates.sort_unstable_by_key(|&i| from.dist(&Self::POS[i]));
+                let dists = Self::STORAGES.map(|c| {
+                    env.dist_dict
+                        .dist(storage_flag, from, c, consider_container)
+                        + env.dist_dict.dist(storage_flag, c, goal, true)
+                });
+                candidates.shuffle(rng);
+                candidates.sort_by_key(|&i| dists[i - Input::N]);
                 const TAKE_COUNT: usize = 3;
                 state.temp_count += 1;
 
@@ -391,12 +417,10 @@ impl State {
                     // クレーンの左移動 + Pick + ゴールまでの移動 + Dropが仕事量
                     // potential_diffが負になること、一時保管場所にDropする操作は進捗を生まないことに注意
                     let total_work = crane_back_work + pick_work + potential_diff;
-                    let move_len = env.dist_dict.dist(
-                        storage_flag,
-                        from,
-                        to,
-                        !Input::is_large_crane(best_crane),
-                    ) as u8;
+                    let move_len = env
+                        .dist_dict
+                        .dist(storage_flag, from, to, consider_container)
+                        as u8;
                     let drop_turn =
                         (pick_turn + 1 + move_len).max(state.container_avail_turns[temp_i]);
                     state.container_avail_turns[temp_i] = drop_turn + 2;
@@ -419,6 +443,7 @@ impl State {
                         turn,
                         container_i,
                         remaining - 1,
+                        rng,
                     );
                 }
             }
