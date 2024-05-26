@@ -32,7 +32,7 @@ pub(super) fn order_tasks(
     let result: Turns = state.simulate(&env, 200)?;
     eprintln!("elapsed: {:?}", since.elapsed());
     eprintln!("{:?}", result);
-    eprintln!("{}", result.calc_score());
+    eprintln!("{}", result.calc_score(&env));
 
     breakdown::breakdown(&env, &state)
 }
@@ -89,7 +89,7 @@ impl State {
 
     fn calc_score(&self, env: &Env, max_turn: usize) -> Result<f64, &'static str> {
         let turns: Turns = self.simulate(env, max_turn)?;
-        Ok(turns.calc_score())
+        Ok(turns.calc_score(env))
     }
 
     fn simulate<T: Recorder>(&self, env: &Env, max_turn: usize) -> Result<T, &'static str> {
@@ -257,16 +257,16 @@ impl Turns {
         Self { turns }
     }
 
-    fn calc_score(&self) -> f64 {
+    fn calc_score(&self, env: &Env) -> f64 {
         // logsumexp
-        const KAPPA: f64 = 3.0;
+        let kappa = env.input.params().kappa_step02();
         let logsumexp = self
             .turns
             .iter()
-            .map(|&t| (t as f64 / KAPPA).exp())
+            .map(|&t| (t as f64 / kappa).exp())
             .sum::<f64>()
             .ln()
-            * KAPPA;
+            * kappa;
         logsumexp
     }
 }

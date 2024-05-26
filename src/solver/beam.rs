@@ -11,9 +11,9 @@ use crate::{
 
 use super::{Solver, SolverResult};
 
-mod step03_execute;
 mod step01_gen;
 mod step02_order;
+mod step03_execute;
 
 pub struct BeamSolver {
     seed: u64,
@@ -29,7 +29,7 @@ impl BeamSolver {
 impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
-        let precalc = Precalc::new();
+        let precalc = Precalc::new(input);
         let all_tasks = step01_gen::generate_tasks(input, &mut rng)?;
 
         let subtasks = step02_order::order_tasks(input, &precalc, &all_tasks)?;
@@ -55,10 +55,8 @@ struct Precalc {
 }
 
 impl Precalc {
-    const KAPPA: f64 = 1.0;
-
-    fn new() -> Self {
-        let exp_table = array::from_fn(|i| (i as f64 / Self::KAPPA).exp());
+    fn new(input: &Input) -> Self {
+        let exp_table = array::from_fn(|i| (i as f64 / input.params().kappa_step03()).exp());
 
         Self {
             dist_dict: DistDict::new(),

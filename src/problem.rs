@@ -10,6 +10,7 @@ pub type Grid<T> = ConstMap2d<T, { Input::N }, { Input::N * Input::N }>;
 #[derive(Debug, Clone)]
 pub struct Input {
     containers: [[Container; Input::N]; Input::N],
+    params: Params,
 }
 
 impl Input {
@@ -17,7 +18,8 @@ impl Input {
     pub const CONTAINER_COUNT: usize = Self::N * Self::N;
 
     fn new(containers: [[Container; Input::N]; Input::N]) -> Self {
-        Self { containers }
+        let params = Params::new();
+        Self { containers, params }
     }
 
     pub fn read_input() -> Self {
@@ -47,6 +49,10 @@ impl Input {
 
     pub const fn get_goal(container: Container) -> Coord {
         Coord::new(container.index() / Input::N, Input::N - 1)
+    }
+
+    pub const fn params(&self) -> &Params {
+        &self.params
     }
 }
 
@@ -360,5 +366,61 @@ impl Display for Output {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Params {
+    kappa_step02: f64,
+    kappa_step03: f64,
+    temp0: f64,
+    temp1: f64,
+    neigh_weight: [f64; 7],
+}
+
+impl Params {
+    pub fn new() -> Self {
+        let args = std::env::args().collect::<Vec<_>>();
+        let kappa_step02 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(3.0);
+        let kappa_step03 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1.0);
+        let temp0 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(1e0);
+        let temp1 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(1e-1);
+        let neigh_weight = [
+            args.get(5).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(6).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(7).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(8).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(9).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(10).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(11).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+        ];
+
+        Self {
+            kappa_step02,
+            kappa_step03,
+            temp0,
+            temp1,
+            neigh_weight,
+        }
+    }
+
+    pub fn kappa_step02(&self) -> f64 {
+        self.kappa_step02
+    }
+
+    pub fn kappa_step03(&self) -> f64 {
+        self.kappa_step03
+    }
+
+    pub fn temp0(&self) -> f64 {
+        self.temp0
+    }
+
+    pub fn temp1(&self) -> f64 {
+        self.temp1
+    }
+
+    pub fn neigh_weight(&self) -> &[f64; 7] {
+        &self.neigh_weight
     }
 }

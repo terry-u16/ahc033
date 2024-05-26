@@ -6,6 +6,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rand::prelude::*;
+use rand_distr::WeightedAliasIndex;
 
 const STORAGES: [Coord; 6] = [
     Coord::new(0, 2),
@@ -32,9 +33,11 @@ pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> St
     let duration_inv = 1.0 / duration;
     let since = std::time::Instant::now();
 
-    let temp0 = 1e0;
-    let temp1 = 1e-1;
+    let temp0 = env.input.params().temp0();
+    let temp1 = env.input.params().temp1();
     let mut temp = temp0;
+    let neigh_weights =
+        WeightedAliasIndex::new(env.input.params().neigh_weight().to_vec()).unwrap();
 
     loop {
         all_iter += 1;
@@ -48,7 +51,7 @@ pub(super) fn annealing(env: &Env, initial_solution: State, duration: f64) -> St
         }
 
         // 変形
-        let neigh_type = rng.gen_range(0..7);
+        let neigh_type = neigh_weights.sample(&mut rng);
         let neigh = match neigh_type {
             0 => SwapAfter::gen(&state, &mut rng),
             1 => Move::gen(&state, &mut rng),
