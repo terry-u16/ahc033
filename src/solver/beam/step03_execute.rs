@@ -158,6 +158,8 @@ impl State {
             Operation::Left,
         ];
 
+        let storage_flag = env.precalc.dist_dict.get_flag(|c| self.board[c] > 0);
+
         for crane_i in 0..Input::N {
             let crane = self.cranes[crane_i];
             let candidates = &mut candidates[crane_i];
@@ -180,12 +182,38 @@ impl State {
                     };
                     candidates.push(op);
                 } else {
+                    let nearest_crane_dist = self
+                        .cranes
+                        .iter()
+                        .filter_map(|c| c.coord())
+                        .map(|c| c.dist(&coord))
+                        .filter(|&d| d > 0)
+                        .min()
+                        .unwrap_or(usize::MAX);
+                    let consider_container = !Input::is_large_crane(crane_i) && crane.is_holding();
+                    let current_dist = env.precalc.dist_dict.dist(
+                        storage_flag,
+                        coord,
+                        destination,
+                        consider_container,
+                    );
+
                     if crane.is_holding() && !Input::is_large_crane(crane_i) {
                         // コンテナを考慮して移動
                         for &op in MOVES.iter() {
                             let next = coord + op.dir();
                             if next.in_map(Input::N) && self.board[next] <= 0 {
-                                candidates.push(op);
+                                let next_dist = env.precalc.dist_dict.dist(
+                                    storage_flag,
+                                    next,
+                                    destination,
+                                    consider_container,
+                                );
+
+                                // 他のクレーンが遠いときは損しない移動方法だけを考慮
+                                if nearest_crane_dist <= 1 || next_dist <= current_dist {
+                                    candidates.push(op);
+                                }
                             }
                         }
                     } else {
@@ -193,7 +221,17 @@ impl State {
                         for &op in MOVES.iter() {
                             let next = coord + op.dir();
                             if next.in_map(Input::N) {
-                                candidates.push(op);
+                                let next_dist = env.precalc.dist_dict.dist(
+                                    storage_flag,
+                                    next,
+                                    destination,
+                                    consider_container,
+                                );
+
+                                // 他のクレーンが遠いときは損しない移動方法だけを考慮
+                                if nearest_crane_dist <= 1 || next_dist <= current_dist {
+                                    candidates.push(op);
+                                }
                             }
                         }
                     }
@@ -201,7 +239,6 @@ impl State {
             }
         }
 
-        let storage_flag = env.precalc.dist_dict.get_flag(|c| self.board[c] > 0);
         let mut cant_in = Grid::new([false; Input::N * Input::N]);
         let mut cant_move = Grid::new([[false; 8]; Input::N * Input::N]);
         let mut state = self.clone();
