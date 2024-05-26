@@ -7,6 +7,9 @@ use crate::{
     problem::{Container, CraneState, Grid, Input},
 };
 use itertools::Itertools;
+use rand::prelude::*;
+use rand::SeedableRng;
+use rand_pcg::Pcg64Mcg;
 use std::array;
 
 pub(super) fn order_tasks(
@@ -15,15 +18,15 @@ pub(super) fn order_tasks(
     tasks: &[Task],
 ) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
-    let state1 = State::new(tasks, |_| 0);
-    let state2 = State::new(tasks, |i| i % Input::N);
+    let mut rng = Pcg64Mcg::from_entropy();
 
-    let state = if state1.calc_score(&env, 1000).unwrap_or(f64::MAX)
-        < state2.calc_score(&env, 1000).unwrap_or(f64::MAX)
-    {
-        state1
-    } else {
-        state2
+    let state = loop {
+        let state = State::new(tasks, |_| rng.gen_range(0..Input::N));
+        if state.calc_score(&env, 1000).is_ok() {
+            break state;
+        }
+
+        eprintln!("retrying...");
     };
 
     let state = annealing::annealing(&env, state, 1.5);
@@ -62,7 +65,7 @@ struct State {
 }
 
 impl State {
-    fn new(tasks: &[Task], assign_fn: impl Fn(usize) -> usize) -> Self {
+    fn new(tasks: &[Task], mut assign_fn: impl FnMut(usize) -> usize) -> Self {
         let all_tasks = tasks
             .iter()
             .map(|t| {
@@ -203,7 +206,7 @@ impl State {
 
                 // available_turn制約により1ターンは状況が変化しない可能性がある
                 // 2ターン以上状況が変化しない場合は終了
-                if no_progress >= 2 {
+                if no_progress >= 3 {
                     return Err("no progress");
                 }
             } else {
