@@ -7,7 +7,11 @@ use crate::{
     grid::Coord,
     problem::{Container, CraneState, Grid, Input, Operation},
 };
+use rand::prelude::*;
+use rand_pcg::Pcg64Mcg;
 use std::array;
+
+const HASH_LEN: usize = 11;
 
 pub(super) fn execute(
     input: &Input,
@@ -15,7 +19,7 @@ pub(super) fn execute(
     tasks: &[Vec<SubTask>; Input::N],
     max_turn: usize,
 ) -> Result<Vec<[Operation; Input::N]>, &'static str> {
-    const BEAM_SIZE: usize = (1 << (Input::N * 2)) * 3;
+    const BEAM_SIZE: usize = 1 << HASH_LEN;
     let tasks = dag::critical_path_analysis(tasks, precalc);
     let env = Env::new(input, precalc, tasks);
     let mut history = History::new();
@@ -59,14 +63,29 @@ struct Env<'a> {
     _input: &'a Input,
     precalc: &'a Precalc,
     tasks: TaskSet,
+    hashes: [Grid<usize>; Input::N],
 }
 
 impl<'a> Env<'a> {
     fn new(input: &'a Input, precalc: &'a Precalc, tasks: TaskSet) -> Self {
+        const HASH_MASK: usize = (1 << HASH_LEN) - 1;
+        let mut hashes = [Grid::new([0; Input::N * Input::N]); Input::N];
+        let mut rng = Pcg64Mcg::new(42);
+
+        for i in 0..Input::N {
+            for row in 0..Input::N {
+                for col in 0..Input::N {
+                    let c = Coord::new(row, col);
+                    hashes[i][c] = rng.gen::<usize>() & HASH_MASK;
+                }
+            }
+        }
+
         Self {
             _input: input,
             precalc,
             tasks,
+            hashes,
         }
     }
 }
@@ -255,7 +274,6 @@ impl State {
             0.0,
             0,
             0,
-            0,
         );
     }
 
@@ -271,11 +289,9 @@ impl State {
         storage_flag: StorageFlag,
         score: f64,
         hash: usize,
-        row_col_sum: usize,
         depth: usize,
     ) {
         if depth == Input::N {
-            let hash = hash * 3 + row_col_sum % 3;
             let old_score = beam[hash].map_or(f64::MAX, |s| s.score);
 
             if score < old_score {
@@ -315,7 +331,6 @@ impl State {
                     storage_flag,
                     score,
                     hash,
-                    row_col_sum,
                     depth + 1,
                 );
 
@@ -370,8 +385,7 @@ impl State {
             }
 
             // ハッシュ値を更新
-            let new_hash = hash * 4 + (next.row() % 2 * 2 + next.col() % 2);
-            let new_row_col_sum = row_col_sum + next.row() + next.col();
+            let new_hash = hash ^ env.hashes[crane_i][next];
 
             // スコア
             let new_crane = self.cranes[crane_i].coord();
@@ -401,7 +415,6 @@ impl State {
                 storage_flag,
                 score + score_diff,
                 new_hash,
-                new_row_col_sum,
                 depth + 1,
             );
 
