@@ -10,6 +10,8 @@ use itertools::{iproduct, Itertools};
 use rand::prelude::*;
 use rand::Rng;
 
+use super::{DistDict, Precalc};
+
 const N: usize = Input::N;
 const NP1: usize = N + 1;
 const N2: usize = N * N;
@@ -56,7 +58,12 @@ impl Task {
     }
 }
 
-pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
+pub(super) fn generate_tasks(
+    input: &Input,
+    precalc: &Precalc,
+    rng: &mut impl Rng,
+) -> Result<Vec<Task>, &'static str> {
+    let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
     beam[0][0].push(State::init(input));
     let mut history = History::new();
@@ -86,12 +93,34 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
             }
 
             for state in b.iter_mut() {
-                state.gen_next(input, &mut beam, &mut history);
+                state.gen_next(&env, &mut beam, &mut history);
             }
         }
     }
 
     todo!();
+}
+
+struct Env<'a> {
+    input: &'a Input,
+    dist_dict: &'a DistDict,
+    index_grid: Grid<usize>,
+}
+
+impl<'a> Env<'a> {
+    fn new(input: &'a Input, dist_dict: &'a DistDict) -> Self {
+        let mut index_grid = Grid::new([!0; Input::N * Input::N]);
+
+        for (i, c) in State::POS.iter().enumerate() {
+            index_grid[c] = i;
+        }
+
+        Self {
+            input,
+            dist_dict,
+            index_grid,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -161,12 +190,7 @@ impl State {
         self.finished_container_count == Input::CONTAINER_COUNT as u8
     }
 
-    fn gen_next(
-        &mut self,
-        input: &Input,
-        beam: &mut Vec<Vec<Vec<Self>>>,
-        history: &mut History<Task>,
-    ) {
+    fn gen_next(&mut self, env: &Env, beam: &mut Vec<Vec<Vec<Self>>>, history: &mut History<Task>) {
         let mut container_counts = [0; Input::N + Self::STORAGE_COUNT];
         let mut container_suffix_sum = [0; Input::N + Self::STORAGE_COUNT];
 
@@ -205,7 +229,7 @@ impl State {
 
         let mut state = *self;
         state.dfs(
-            input,
+            env,
             beam,
             history,
             &container_suffix_sum,
@@ -217,7 +241,7 @@ impl State {
 
     fn dfs(
         &mut self,
-        input: &Input,
+        env: &Env,
         beam: &mut Vec<Vec<Vec<Self>>>,
         history: &mut History<Task>,
         container_suffix_sum: &[usize; Input::N + Self::STORAGE_COUNT],
@@ -279,17 +303,20 @@ impl State {
 
             // in側の更新
             let mut state = *self;
+            let storage_flag = env
+                .dist_dict
+                .get_flag(|c| state.containers[env.index_grid[c]].is_some());
 
             // pickを開始するターン
-            let pick_turn =
-                (turn + crane_pos.dist(&from) as u8).max(state.container_avail_turns[container_i]);
+            let move_len = env.dist_dict.dist(storage_flag, crane_pos, from, false) as u8;
+            let pick_turn = (turn + move_len).max(state.container_avail_turns[container_i]);
             state.container_avail_turns[container_i] = turn + 2;
 
             // pick_work: Pickの有効作業量。一時保管場所からのPickは無駄な作業なので0
             let pick_work = if container_i < Input::N {
                 let in_ptr = &mut state.in_ptr[container_i];
                 *in_ptr += 1;
-                state.containers[container_i] = input.containers()[container_i]
+                state.containers[container_i] = env.input.containers()[container_i]
                     .get(*in_ptr as usize)
                     .copied();
                 1
@@ -316,7 +343,11 @@ impl State {
                 let total_work = crane_back_work + pick_work + prev_potential + 1;
 
                 // dropが開始するターン
-                let drop_turn = (pick_turn + 1 + dist as u8).max(state.out_avail_turns[goal.row()]);
+                let move_len =
+                    env.dist_dict
+                        .dist(storage_flag, from, goal, !Input::is_large_crane(best_crane))
+                        as u8;
+                let drop_turn = (pick_turn + 1 + move_len).max(state.out_avail_turns[goal.row()]);
                 state.out_avail_turns[goal.row()] = drop_turn + 2;
 
                 // クレーンが使用可能になるターン
@@ -330,7 +361,7 @@ impl State {
                 let task = Task::new(best_crane as u8, container, from, goal);
                 state.history = history.push(task, state.history);
                 state.dfs(
-                    input,
+                    env,
                     beam,
                     history,
                     container_suffix_sum,
@@ -351,7 +382,6 @@ impl State {
                     let mut state = state;
                     state.containers[temp_i] = Some(container);
                     let to = Self::POS[temp_i];
-                    let dist = from.dist(&to);
                     let prev_potential = from.dist(&goal) as i32;
                     let new_potential = to.dist(&goal) as i32;
                     let potential_diff = prev_potential - new_potential;
@@ -359,8 +389,14 @@ impl State {
                     // クレーンの左移動 + Pick + ゴールまでの移動 + Dropが仕事量
                     // potential_diffが負になること、一時保管場所にDropする操作は進捗を生まないことに注意
                     let total_work = crane_back_work + pick_work + potential_diff;
+                    let move_len = env.dist_dict.dist(
+                        storage_flag,
+                        from,
+                        to,
+                        !Input::is_large_crane(best_crane),
+                    ) as u8;
                     let drop_turn =
-                        (pick_turn + 1 + dist as u8).max(state.container_avail_turns[temp_i]);
+                        (pick_turn + 1 + move_len).max(state.container_avail_turns[temp_i]);
                     state.container_avail_turns[temp_i] = drop_turn + 2;
 
                     let crane_avail_turn = drop_turn + 1;
@@ -373,7 +409,7 @@ impl State {
                     let task = Task::new(best_crane as u8, container, from, to);
                     state.history = history.push(task, state.history);
                     state.dfs(
-                        input,
+                        env,
                         beam,
                         history,
                         container_suffix_sum,

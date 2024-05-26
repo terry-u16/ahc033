@@ -30,7 +30,7 @@ impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
         let precalc = Precalc::new();
-        let all_tasks = task_gen::generate_tasks(input, &mut rng)?;
+        let all_tasks = task_gen::generate_tasks(input, &precalc, &mut rng)?;
 
         let subtasks = task_order::order_tasks(input, &precalc, &all_tasks)?;
 
@@ -146,6 +146,25 @@ impl DistDict {
                 }
             }
         }
+
+        // INFになるのを防ぐ
+        let mut temp = dists.clone();
+
+        for row in 0..Input::N {
+            for col in 0..Input::N {
+                let c = Coord::new(row, col);
+
+                for &adj in ADJACENTS.iter() {
+                    let next = c + adj;
+
+                    if next.in_map(Input::N) {
+                        temp[c].change_min(dists[next].saturating_add(1));
+                    }
+                }
+            }
+        }
+
+        *dists = temp;
 
         for row in 0..Input::N {
             for col in 0..Input::N {
