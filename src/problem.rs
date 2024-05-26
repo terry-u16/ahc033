@@ -381,18 +381,44 @@ pub struct Params {
 impl Params {
     pub fn new() -> Self {
         let args = std::env::args().collect::<Vec<_>>();
-        let kappa_step02 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(3.0);
-        let kappa_step03 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1.0);
-        let temp0 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(1e0);
-        let temp1 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(1e-1);
+        let kappa_step02 = args
+            .get(1)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.3822671614215993);
+        let kappa_step03 = args
+            .get(2)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.7071420688292552);
+        let temp0 = args
+            .get(3)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.33718746348111384);
+        let temp1 = args
+            .get(4)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.23799416640806573);
         let neigh_weight = [
-            args.get(5).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(6).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(7).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(8).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(9).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(10).and_then(|s| s.parse().ok()).unwrap_or(1e0),
-            args.get(11).and_then(|s| s.parse().ok()).unwrap_or(1e0),
+            args.get(5)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.44383794066716115),
+            args.get(6)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.0020780212528406206),
+            args.get(7)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.041213836417613614),
+            args.get(8)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.009147302082224574),
+            args.get(9)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.02070058170148708),
+            args.get(10)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.01277049200335966),
+            args.get(11)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.014255297960146098),
         ];
 
         Self {
