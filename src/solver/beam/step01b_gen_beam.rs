@@ -10,19 +10,20 @@ use itertools::Itertools;
 use rand::prelude::*;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
-use std::array;
+use std::{array, collections::HashSet};
 
 const MAX_TURN: usize = 80;
 
 pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Task>, &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
-    beam[0][0].push(State::init(input));
+    beam[0][0].push(State::init(&env));
     let mut history = History::new();
     let mut rng = Pcg64Mcg::from_entropy();
     let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
     let mut beam_width_suggester =
         BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.5, 3000, 300, 10000, 1);
+    let mut hashset = HashSet::new();
 
     for turn in 0..MAX_TURN {
         let beam_width = beam_width_suggester.suggest();
@@ -54,14 +55,27 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
                 }
             }
 
-            if b.len() > beam_width {
-                b.select_nth_unstable(beam_width);
-                b.truncate(beam_width);
-            }
+            b.sort_unstable();
+            hashset.clear();
+            let mut count = 0;
+            let mut hashhit = 0;
 
             for state in b.iter_mut() {
+                if !hashset.insert(state.hash) {
+                    hashhit += 1;
+                    continue;
+                }
+
+                count += 1;
+
+                if count >= beam_width {
+                    break;
+                }
+
                 state.gen_next(&env, &mut beam, &mut history, &mut rng);
             }
+
+            eprintln!("hashhit: {} / {}", hashhit, b.len());
         }
     }
 
@@ -72,6 +86,8 @@ struct Env<'a> {
     input: &'a Input,
     dist_dict: &'a DistDict,
     index_grid: Grid<usize>,
+    crane_hash: [Grid<u64>; Input::N],
+    container_hash: [Grid<u64>; Input::CONTAINER_COUNT],
 }
 
 impl<'a> Env<'a> {
@@ -82,10 +98,30 @@ impl<'a> Env<'a> {
             index_grid[c] = i;
         }
 
+        let mut rng = Pcg64Mcg::from_entropy();
+        let mut crane_hash = [Grid::new([0; Input::N * Input::N]); Input::N];
+        let mut container_hash = [Grid::new([0; Input::N * Input::N]); Input::CONTAINER_COUNT];
+
+        for row in 0..Input::N {
+            for col in 0..Input::N {
+                let c = Coord::new(row, col);
+
+                for i in 0..Input::N {
+                    crane_hash[i][c] = rng.gen();
+                }
+
+                for i in 0..Input::CONTAINER_COUNT {
+                    container_hash[i][c] = rng.gen();
+                }
+            }
+        }
+
         Self {
             input,
             dist_dict,
             index_grid,
+            crane_hash,
+            container_hash,
         }
     }
 }
@@ -103,6 +139,7 @@ struct State {
     temp_count: u8,
     finished_container_count: u8,
     score: f32,
+    hash: u64,
     history: HistoryIndex,
 }
 
@@ -139,10 +176,15 @@ impl State {
     ];
     const CRANE_AVAIL: u8 = u8::MAX;
 
-    fn init(input: &Input) -> Self {
+    fn init(env: &Env) -> Self {
         let mut containers = [None; Input::N + Self::STORAGE_COUNT];
+        let mut hash = 0;
+
         for i in 0..Input::N {
-            containers[i] = Some(input.containers()[i][0]);
+            let container = env.input.containers()[i][0];
+            containers[i] = Some(container);
+            hash ^= env.crane_hash[i][Self::POS[i]];
+            hash ^= env.container_hash[container.index()][Self::POS[i]];
         }
 
         Self {
@@ -157,6 +199,7 @@ impl State {
             crane_avail_turns: [0; Input::N],
             crane_score_per_turn: [0.0; Input::N],
             score: 0.0,
+            hash,
             history: HistoryIndex::ROOT,
         }
     }
@@ -272,6 +315,9 @@ impl State {
                 continue;
             }
 
+            let mut state = *self;
+            state.hash ^= env.container_hash[container.index()][from];
+
             // craneのアサイン
             let mut best_crane = !0;
             let mut best_dist = usize::MAX;
@@ -289,9 +335,9 @@ impl State {
 
             let crane_pos = self.cranes[best_crane];
             let consider_container = !Input::is_large_crane(best_crane);
+            state.hash ^= env.crane_hash[best_crane][crane_pos];
 
             // in側の更新
-            let mut state = *self;
             let storage_flag = env
                 .dist_dict
                 .get_flag(|c| state.containers[env.index_grid[c]].is_some());
@@ -324,6 +370,7 @@ impl State {
                 // そのまま搬出
                 state.out_next[goal.row()] += 1;
                 state.finished_container_count += 1;
+                state.hash ^= env.container_hash[container.index()][goal];
 
                 let dist = from.dist(&goal);
                 let prev_potential = dist as i32;
@@ -346,6 +393,7 @@ impl State {
                 state.crane_score_per_turn[best_crane] = score_per_turn;
                 state.crane_avail_turns[best_crane] = crane_avail_turn;
                 state.cranes[best_crane] = goal;
+                state.hash ^= env.crane_hash[best_crane][goal];
 
                 // historyの追加
                 let task = Task::new(Some(best_crane as u8), container, from, goal);
@@ -379,6 +427,7 @@ impl State {
                     let mut state = state;
                     state.containers[temp_i] = Some(container);
                     let to = Self::POS[temp_i];
+                    state.hash ^= env.container_hash[container.index()][to];
                     let prev_potential = from.dist(&goal) as i32;
                     let new_potential = to.dist(&goal) as i32;
                     let potential_diff = prev_potential - new_potential;
@@ -400,6 +449,7 @@ impl State {
                     let score_per_turn = total_work as f32 / total_turn as f32;
                     state.crane_score_per_turn[best_crane] = score_per_turn;
                     state.crane_avail_turns[best_crane] = crane_avail_turn;
+                    state.hash ^= env.crane_hash[best_crane][to];
 
                     // historyの追加
                     let task = Task::new(Some(best_crane as u8), container, from, to);
