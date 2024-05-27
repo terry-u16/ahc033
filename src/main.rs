@@ -29,8 +29,7 @@ fn main() -> Result<(), &'static str> {
 
     eprintln!("elapsed: {:?}", since.elapsed());
 
-    let has_enough_time = since.elapsed().as_secs_f64() <= 0.05;
-    let solver = BeamSolver6::new(rng.gen(), best_score as usize, has_enough_time);
+    let solver = BeamSolver6::new(rng.gen(), best_score as usize);
     solve(solver, &input, &mut best_score, &mut best_result);
 
     eprintln!("elapsed: {:?}", since.elapsed());

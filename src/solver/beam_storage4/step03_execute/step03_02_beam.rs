@@ -8,7 +8,7 @@ use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
 use std::array;
 
-const HASH_LEN: usize = 10;
+const HASH_LEN: usize = 11;
 const BEAM_SIZE: usize = 1 << HASH_LEN;
 
 pub(super) fn beam(

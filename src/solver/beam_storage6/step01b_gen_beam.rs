@@ -14,27 +14,15 @@ use std::{array, collections::HashSet};
 
 const MAX_TURN: usize = 80;
 
-pub(super) fn generate_tasks(
-    input: &Input,
-    precalc: &Precalc,
-    has_enough_time: bool,
-) -> Result<Vec<Task>, &'static str> {
+pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Task>, &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
     beam[0][0].push(State::init(&env));
     let mut history = History::new();
     let mut rng = Pcg64Mcg::from_entropy();
     let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
-    let time_mul = if has_enough_time { 1.0 } else { 0.5 };
-    let mut beam_width_suggester = BayesianBeamWidthSuggester::new(
-        MAX_TURN,
-        5,
-        0.5 * time_mul,
-        (3000.0 * time_mul).round() as usize,
-        300,
-        10000,
-        1,
-    );
+    let mut beam_width_suggester =
+        BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.5, 3000, 300, 10000, 1);
     let mut hashset = HashSet::new();
 
     for turn in 0..MAX_TURN {

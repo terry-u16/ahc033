@@ -19,16 +19,11 @@ mod step03_execute;
 pub struct BeamSolver6 {
     seed: u64,
     max_turn: usize,
-    has_enough_time: bool,
 }
 
 impl BeamSolver6 {
-    pub fn new(seed: u64, max_turn: usize, has_enough_time: bool) -> Self {
-        Self {
-            seed,
-            max_turn,
-            has_enough_time,
-        }
+    pub fn new(seed: u64, max_turn: usize) -> Self {
+        Self { seed, max_turn }
     }
 }
 
@@ -45,15 +40,12 @@ impl Solver for BeamSolver6 {
         all_tasks.push(tasks);
 
         let since = std::time::Instant::now();
-        if let Ok(tasks) =
-            step01b_gen_beam::generate_tasks(input, &precalc_no_inf, self.has_enough_time)
-        {
+        if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc_no_inf) {
             all_tasks.push(tasks);
         };
         eprintln!("step01b elapsed: {:?}", since.elapsed());
 
-        let subtasks =
-            step02_order::order_tasks(input, &precalc_inf, all_tasks, self.has_enough_time)?;
+        let subtasks = step02_order::order_tasks(input, &precalc_inf, all_tasks)?;
 
         let since = std::time::Instant::now();
         let operations = step03_execute::execute(input, &precalc_inf, &subtasks, self.max_turn)?;

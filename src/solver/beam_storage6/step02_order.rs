@@ -16,7 +16,6 @@ pub(super) fn order_tasks(
     input: &Input,
     precalc: &Precalc,
     tasks: Vec<Vec<Task>>,
-    has_enough_time: bool,
 ) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut rng = Pcg64Mcg::from_entropy();
@@ -29,7 +28,7 @@ pub(super) fn order_tasks(
     }
 
     let step1_duration = 0.5 / tasks.len() as f64;
-    let step2_duration = if has_enough_time { 1.0 } else { 0.5 };
+    let step2_duration = 1.0;
 
     'main: for tasks in tasks {
         let mut state = State::new(&tasks, |c, i| c.unwrap_or(i % Input::N));
