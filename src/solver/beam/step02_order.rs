@@ -1,5 +1,5 @@
-mod annealing;
-mod breakdown;
+mod step02_01_annealing;
+mod step02_02_breakdown;
 
 use super::{step01_gen::Task, DistDict, Precalc};
 use crate::{
@@ -29,15 +29,9 @@ pub(super) fn order_tasks(
         eprintln!("retrying...");
     };
 
-    let state = annealing::annealing(&env, state, 1.5);
+    let state = step02_01_annealing::annealing(&env, state, 1.5);
 
-    let since = std::time::Instant::now();
-    let result: Turns = state.simulate(&env, 200)?;
-    eprintln!("elapsed: {:?}", since.elapsed());
-    eprintln!("{:?}", result);
-    eprintln!("{}", result.calc_score(&env));
-
-    breakdown::breakdown(&env, &state)
+    step02_02_breakdown::breakdown(&env, &state)
 }
 
 #[derive(Debug, Clone, Copy)]
