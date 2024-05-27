@@ -24,6 +24,12 @@ pub(super) fn order_tasks(
     let mut best_state = None;
     let mut best_score = f64::INFINITY;
 
+    if tasks.len() == 0 {
+        return Err("no tasks");
+    }
+
+    let step1_duration = 0.5 / tasks.len() as f64;
+
     for tasks in tasks {
         let mut state = State::new(&tasks, |i| i % Input::N);
 
@@ -36,7 +42,7 @@ pub(super) fn order_tasks(
             state = State::new(&tasks, |_| rng.gen_range(0..Input::N));
         }
 
-        let state = step02_01_annealing::annealing(&env, state, 1.5);
+        let state = step02_01_annealing::annealing(&env, state, step1_duration);
 
         if best_score.change_min(
             state
@@ -50,6 +56,9 @@ pub(super) fn order_tasks(
     let Some(state) = best_state else {
         return Err("no valid state found");
     };
+
+    let step2_duration = 1.0;
+    let state = step02_01_annealing::annealing(&env, state, step2_duration);
 
     step02_02_breakdown::breakdown(&env, &state)
 }

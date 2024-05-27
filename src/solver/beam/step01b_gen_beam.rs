@@ -16,7 +16,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
     beam[0][0].push(State::init(input));
     let mut history = History::new();
-    const BEAM_WIDTH: usize = 3000;
+    const BEAM_WIDTH: usize = 2000;
     let mut rng = Pcg64Mcg::from_entropy();
     let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
 
@@ -29,7 +29,6 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
             }
 
             eprintln!("{}", completed.score);
-            eprintln!("{:?}", completed.crane_score_per_turn);
             eprintln!("{:?}", completed.crane_avail_turns);
             eprintln!("1st beam turn: {}", turn);
             return Ok(history.collect(completed.history));

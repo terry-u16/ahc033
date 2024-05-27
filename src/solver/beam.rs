@@ -30,21 +30,22 @@ impl BeamSolver {
 impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
-        let precalc = Precalc::new(input);
+        let precalc_inf = Precalc::new(input, false);
+        let precalc_no_inf = Precalc::new(input, true);
 
         let mut all_tasks = vec![];
         if let Ok(tasks) = step01a_gen_dp::generate_tasks(input, &mut rng) {
             all_tasks.push(tasks);
         };
 
-        if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc) {
+        if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc_no_inf) {
             all_tasks.push(tasks);
         };
 
-        let subtasks = step02_order::order_tasks(input, &precalc, all_tasks)?;
+        let subtasks = step02_order::order_tasks(input, &precalc_inf, all_tasks)?;
 
         let since = std::time::Instant::now();
-        let operations = step03_execute::execute(input, &precalc, &subtasks, self.max_turn)?;
+        let operations = step03_execute::execute(input, &precalc_inf, &subtasks, self.max_turn)?;
         eprintln!("elapsed: {:?}", since.elapsed());
         let mut yard = Yard::new(&input);
         let mut output = Output::new();
@@ -66,11 +67,11 @@ struct Precalc {
 }
 
 impl Precalc {
-    fn new(input: &Input) -> Self {
+    fn new(input: &Input, avoid_inf: bool) -> Self {
         let exp_table = array::from_fn(|i| (i as f64 / input.params().kappa_step03()).exp());
 
         Self {
-            dist_dict: DistDict::new(),
+            dist_dict: DistDict::new(avoid_inf),
             exp_table,
         }
     }
@@ -97,7 +98,7 @@ impl DistDict {
         Coord::new(4, 3),
     ];
 
-    fn new() -> Self {
+    fn new(avoid_inf: bool) -> Self {
         let mut dists_with_container = vec![];
         let mut next_with_container = vec![];
 
@@ -119,7 +120,7 @@ impl DistDict {
             for row in 0..Input::N {
                 for col in 0..Input::N {
                     let c = Coord::new(row, col);
-                    Self::bfs(&board, &mut d[c], &mut next[c], c);
+                    Self::bfs(&board, &mut d[c], &mut next[c], c, avoid_inf);
                 }
             }
 
@@ -139,7 +140,13 @@ impl DistDict {
         }
     }
 
-    fn bfs(board: &Grid<bool>, dists: &mut Grid<usize>, next: &mut Grid<Coord>, from: Coord) {
+    fn bfs(
+        board: &Grid<bool>,
+        dists: &mut Grid<usize>,
+        next: &mut Grid<Coord>,
+        from: Coord,
+        avoid_inf: bool,
+    ) {
         dists[from] = 0;
         let mut queue = VecDeque::new();
         queue.push_back(from);
@@ -154,6 +161,28 @@ impl DistDict {
                     queue.push_back(next);
                 }
             }
+        }
+
+        // INFになるのを防ぐ
+
+        if avoid_inf {
+            let mut temp = dists.clone();
+
+            for row in 0..Input::N {
+                for col in 0..Input::N {
+                    let c = Coord::new(row, col);
+
+                    for &adj in ADJACENTS.iter() {
+                        let next = c + adj;
+
+                        if next.in_map(Input::N) {
+                            temp[c].change_min(dists[next].saturating_add(1));
+                        }
+                    }
+                }
+            }
+
+            *dists = temp;
         }
 
         for row in 0..Input::N {
