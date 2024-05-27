@@ -19,15 +19,16 @@ pub(super) fn order_tasks(
 ) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut rng = Pcg64Mcg::from_entropy();
+    let mut state = State::new(tasks, |i| i % Input::N);
 
-    let state = loop {
-        let state = State::new(tasks, |_| rng.gen_range(0..Input::N));
+    loop {
         if state.calc_score(&env, 1000).is_ok() {
-            break state;
+            break;
         }
 
         eprintln!("retrying...");
-    };
+        state = State::new(tasks, |_| rng.gen_range(0..Input::N));
+    }
 
     let state = step02_01_annealing::annealing(&env, state, 1.5);
 
