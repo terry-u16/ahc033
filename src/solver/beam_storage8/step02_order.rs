@@ -28,7 +28,7 @@ pub(super) fn order_tasks(
     }
 
     let step1_duration = 0.5 / tasks.len() as f64;
-    let step2_duration = 0.5;
+    let step2_duration = 0.8;
 
     'main: for tasks in tasks {
         let mut state = State::new(&tasks, |c, i| c.unwrap_or(i % Input::N));

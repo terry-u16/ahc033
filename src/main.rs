@@ -37,7 +37,7 @@ fn main() -> Result<(), &'static str> {
             eprintln!("{}", err);
 
             // 一時保管場所は基本的に6箇所だが、6箇所で足りない場合があるため8箇所も試す
-            if since.elapsed().as_secs_f64() <= 0.5 {
+            if since.elapsed().as_secs_f64() <= 0.1 {
                 eprintln!("Trying BeamSolver8...");
                 let solver = BeamSolver8::new(rng.gen(), best_score as usize);
 

@@ -36,9 +36,8 @@ impl Solver for BeamSolver {
         let precalc_no_inf = Precalc::new(input, true);
 
         let mut all_tasks = vec![];
-        if let Ok(tasks) = step01a_gen_dp::generate_tasks(input, &mut rng) {
-            all_tasks.push(tasks);
-        };
+        let task = step01a_gen_dp::generate_tasks(input, &mut rng)?;
+        all_tasks.push(task);
 
         let since = std::time::Instant::now();
         if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc_no_inf) {
