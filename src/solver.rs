@@ -1,5 +1,6 @@
-pub mod single_crane;
 pub mod beam;
+pub mod beam_storage8;
+pub mod single_crane;
 
 use crate::problem::{Input, Output, Yard};
 
