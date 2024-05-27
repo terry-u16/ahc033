@@ -1,4 +1,5 @@
 mod step01_01_dp;
+mod step01_02_beam;
 
 use crate::{
     common::ChangeMinMax as _,
@@ -45,6 +46,9 @@ impl Task {
 
 pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Task>, &'static str> {
     let (_, history) = dp(input);
+    eprintln!("{:?}", history);
+
+    return Ok(step01_02_beam::beam(input));
 
     let mut tasks = vec![];
     let mut containers = input
