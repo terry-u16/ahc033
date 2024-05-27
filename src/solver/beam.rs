@@ -11,7 +11,8 @@ use crate::{
 
 use super::{Solver, SolverResult};
 
-mod step01_gen;
+mod step01a_gen_dp;
+mod step01b_gen_beam;
 mod step02_order;
 mod step03_execute;
 
@@ -30,9 +31,17 @@ impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
         let precalc = Precalc::new(input);
-        let all_tasks = step01_gen::generate_tasks(input, &mut rng)?;
 
-        let subtasks = step02_order::order_tasks(input, &precalc, &all_tasks)?;
+        let mut all_tasks = vec![];
+        if let Ok(tasks) = step01a_gen_dp::generate_tasks(input, &mut rng) {
+            all_tasks.push(tasks);
+        };
+
+        if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc) {
+            all_tasks.push(tasks);
+        };
+
+        let subtasks = step02_order::order_tasks(input, &precalc, all_tasks)?;
 
         let since = std::time::Instant::now();
         let operations = step03_execute::execute(input, &precalc, &subtasks, self.max_turn)?;

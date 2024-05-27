@@ -4,7 +4,7 @@ use crate::{
     common::ChangeMinMax as _,
     grid::Coord,
     problem::{Container, Grid, Input},
-    solver::beam::step01_gen::step01_01_dp::dp,
+    solver::beam::step01a_gen_dp::step01_01_dp::dp,
 };
 use itertools::Itertools;
 use rand::prelude::*;

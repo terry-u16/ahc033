@@ -1,8 +1,9 @@
 mod step02_01_annealing;
 mod step02_02_breakdown;
 
-use super::{step01_gen::Task, DistDict, Precalc};
+use super::{step01a_gen_dp::Task, DistDict, Precalc};
 use crate::{
+    common::ChangeMinMax,
     grid::Coord,
     problem::{Container, CraneState, Grid, Input},
 };
@@ -15,22 +16,40 @@ use std::array;
 pub(super) fn order_tasks(
     input: &Input,
     precalc: &Precalc,
-    tasks: &[Task],
+    tasks: Vec<Vec<Task>>,
 ) -> Result<[Vec<SubTask>; Input::N], &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut rng = Pcg64Mcg::from_entropy();
-    let mut state = State::new(tasks, |i| i % Input::N);
 
-    loop {
-        if state.calc_score(&env, 1000).is_ok() {
-            break;
+    let mut best_state = None;
+    let mut best_score = f64::INFINITY;
+
+    for tasks in tasks {
+        let mut state = State::new(&tasks, |i| i % Input::N);
+
+        loop {
+            if state.calc_score(&env, 1000).is_ok() {
+                break;
+            }
+
+            eprintln!("retrying...");
+            state = State::new(&tasks, |_| rng.gen_range(0..Input::N));
         }
 
-        eprintln!("retrying...");
-        state = State::new(tasks, |_| rng.gen_range(0..Input::N));
+        let state = step02_01_annealing::annealing(&env, state, 1.5);
+
+        if best_score.change_min(
+            state
+                .calc_score_best_state(&env, usize::MAX)
+                .unwrap_or(f64::INFINITY),
+        ) {
+            best_state = Some(state);
+        }
     }
 
-    let state = step02_01_annealing::annealing(&env, state, 1.5);
+    let Some(state) = best_state else {
+        return Err("no valid state found");
+    };
 
     step02_02_breakdown::breakdown(&env, &state)
 }
