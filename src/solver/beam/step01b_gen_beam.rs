@@ -1,5 +1,6 @@
 use super::{step01a_gen_dp::Task, DistDict, Precalc};
 use crate::{
+    beam::{BayesianBeamWidthSuggester, BeamWidthSuggester as _},
     common::ChangeMinMax as _,
     data_structures::{History, HistoryIndex},
     grid::Coord,
@@ -11,27 +12,27 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use std::array;
 
+const MAX_TURN: usize = 80;
+
 pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Task>, &'static str> {
     let env = Env::new(&input, &precalc.dist_dict);
     let mut beam = vec![vec![vec![]; State::STORAGE_COUNT + 1]; u8::MAX as usize];
     beam[0][0].push(State::init(input));
     let mut history = History::new();
-    const BEAM_WIDTH: usize = 2000;
     let mut rng = Pcg64Mcg::from_entropy();
     let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
+    let mut beam_width_suggester =
+        BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.5, 3000, 300, 10000, 1);
 
     for turn in 0..100 {
+        let beam_width = beam_width_suggester.suggest();
+
         if let Some(completed) = completed_list[turn as usize] {
             let tasks = history.collect(completed.history);
-
-            for t in tasks.iter() {
-                eprintln!("{:?}", t);
-            }
-
             eprintln!("{}", completed.score);
             eprintln!("{:?}", completed.crane_avail_turns);
             eprintln!("1st beam turn: {}", turn);
-            return Ok(history.collect(completed.history));
+            return Ok(tasks);
         }
 
         for storage in 0..=State::STORAGE_COUNT {
@@ -53,9 +54,9 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
                 }
             }
 
-            if b.len() > BEAM_WIDTH {
-                b.select_nth_unstable(BEAM_WIDTH);
-                b.truncate(BEAM_WIDTH);
+            if b.len() > beam_width {
+                b.select_nth_unstable(beam_width);
+                b.truncate(beam_width);
             }
 
             for state in b.iter_mut() {
@@ -233,6 +234,11 @@ impl State {
     ) {
         if remaining == 0 {
             let next_turn = self.crane_avail_turns.iter().copied().min().unwrap();
+
+            if next_turn > MAX_TURN as u8 {
+                return;
+            }
+
             let score_per_turn = self.crane_score_per_turn.iter().copied().sum::<f32>();
             assert!(next_turn > turn);
 
@@ -424,15 +430,12 @@ impl Eq for State {}
 
 impl PartialOrd for State {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+        self.score.partial_cmp(&other.score).map(|c| c.reverse())
     }
 }
 
 impl Ord for State {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // 浮動小数点数の比較は誤差を考慮する
-        let a = (self.score * 100.0).round() as i32;
-        let b = (other.score * 100.0).round() as i32;
-        a.cmp(&b).reverse()
+        self.score.partial_cmp(&other.score).unwrap().reverse()
     }
 }

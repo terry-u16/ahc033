@@ -38,9 +38,11 @@ impl Solver for BeamSolver {
             all_tasks.push(tasks);
         };
 
+        let since = std::time::Instant::now();
         if let Ok(tasks) = step01b_gen_beam::generate_tasks(input, &precalc_no_inf) {
             all_tasks.push(tasks);
         };
+        eprintln!("step01b elapsed: {:?}", since.elapsed());
 
         let subtasks = step02_order::order_tasks(input, &precalc_inf, all_tasks)?;
 

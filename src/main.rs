@@ -3,6 +3,8 @@ mod data_structures;
 mod grid;
 mod problem;
 mod solver;
+mod bayesian;
+mod beam;
 
 use crate::{
     common::ChangeMinMax,

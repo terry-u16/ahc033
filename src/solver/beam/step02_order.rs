@@ -57,7 +57,7 @@ pub(super) fn order_tasks(
         return Err("no valid state found");
     };
 
-    let step2_duration = 1.0;
+    let step2_duration = 0.5;
     let state = step02_01_annealing::annealing(&env, state, step2_duration);
 
     step02_02_breakdown::breakdown(&env, &state)
