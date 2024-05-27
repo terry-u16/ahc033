@@ -29,12 +29,19 @@ pub(super) fn order_tasks(
 
     let step1_duration = 0.5 / tasks.len() as f64;
 
-    for tasks in tasks {
+    'main: for tasks in tasks {
         let mut state = State::new(&tasks, |c, i| c.unwrap_or(i % Input::N));
+        let mut trial_count = 0;
 
         loop {
             if state.calc_score(&env, 1000).is_ok() {
                 break;
+            }
+
+            trial_count += 1;
+
+            if trial_count >= 1000 {
+                continue 'main;
             }
 
             eprintln!("retrying...");
