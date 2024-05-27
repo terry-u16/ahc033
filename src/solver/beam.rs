@@ -30,6 +30,8 @@ impl BeamSolver {
 impl Solver for BeamSolver {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
+
+        // バグを直す（precalc_no_inf）とスコアが下がるので両方用意……
         let precalc_inf = Precalc::new(input, false);
         let precalc_no_inf = Precalc::new(input, true);
 

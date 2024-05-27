@@ -40,7 +40,7 @@ pub(super) fn order_tasks(
 
             trial_count += 1;
 
-            if trial_count >= 1000 {
+            if trial_count >= 10000 {
                 continue 'main;
             }
 
