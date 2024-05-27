@@ -25,7 +25,7 @@ pub(super) fn beam(input: &Input) -> Result<Vec<Task>, &'static str> {
     let mut next_beam = vec![vec![]; STORAGE_LEN + 1];
     next_beam[0].push(0);
     let mut history = History::new();
-    let mut best_score = u16::MAX;
+    let mut best_score = u32::MAX;
     let mut hashes = HashSet::new();
     let mut best_state = State::init(&env);
     const BEAM_WIDTH: usize = 10000;
@@ -49,7 +49,7 @@ pub(super) fn beam(input: &Input) -> Result<Vec<Task>, &'static str> {
         let mut best_out = 0;
 
         for &transition in transitions.iter() {
-            if transition.score > best_score || next_beam.len() > BEAM_WIDTH {
+            if transition.score > best_score {
                 break;
             }
 
@@ -66,7 +66,7 @@ pub(super) fn beam(input: &Input) -> Result<Vec<Task>, &'static str> {
             let hist_index = history.push(transition, state.hist_index);
             let state = transition.apply(&env, state.clone(), hist_index);
 
-            if state.is_completed() && best_score.change_min(state.score()) {
+            if state.is_completed() && best_score.change_min(state.score) {
                 best_state = state.clone();
             }
 
@@ -80,7 +80,7 @@ pub(super) fn beam(input: &Input) -> Result<Vec<Task>, &'static str> {
     }
 
     let history = history.collect(best_state.hist_index);
-    eprintln!("best_score: {}", best_state.score());
+    eprintln!("best_score: {}", best_state.score);
 
     Ok(history.iter().map(|t| t.to_task()).collect_vec())
 }
@@ -119,7 +119,7 @@ struct State {
     right_storages: [Option<Container>; HALF_STORAGE_LEN],
     hist_index: HistoryIndex,
     hash: u64,
-    score: u16,
+    score: u32,
     storage_count: u8,
     out_count: u8,
 }
@@ -145,12 +145,12 @@ impl State {
         }
     }
 
-    fn score(&self) -> u16 {
-        self.score
-    }
-
     fn is_completed(&self) -> bool {
         self.out_count == Input::CONTAINER_COUNT as u8
+    }
+
+    fn score_diff(move_cost: usize, storage_count: u8) -> u32 {
+        move_cost as u32 * 100000 + storage_count as u32
     }
 
     fn transit(&self, env: &Env, beam: &mut Vec<Transition>, state_id: usize) {
@@ -175,14 +175,15 @@ impl State {
                 let dist_diff = row
                     .abs_diff(to.row())
                     .saturating_sub(row.abs_diff(goal.row()));
-                let score_diff = dist_diff as u16 * 2;
+                let storage_count = self.storage_count + 1;
+                let score_diff = Self::score_diff(dist_diff * 2, storage_count);
                 let transition = Transition::new(
                     hash ^ hashmap[to],
                     state_id,
                     Storage::In(row as u8),
                     Storage::Left(index as u8),
                     self.score + score_diff,
-                    self.storage_count + 1,
+                    storage_count,
                     container,
                 );
                 beam.push(transition);
@@ -205,14 +206,16 @@ impl State {
                     0
                 };
 
-                let score_diff = dist_diff as u16 * 2 + detour;
+                let storage_count = self.storage_count + 1;
+                let score_diff = Self::score_diff(dist_diff * 2 + detour, storage_count);
+
                 let transition = Transition::new(
                     hash ^ hashmap[to],
                     state_id,
                     Storage::In(row as u8),
                     Storage::Right(index as u8),
                     self.score + score_diff,
-                    self.storage_count + 1,
+                    storage_count,
                     container,
                 );
                 beam.push(transition);
@@ -231,14 +234,16 @@ impl State {
                     0
                 };
 
-                let score_diff = detour;
+                let storage_count = self.storage_count;
+                let score_diff = Self::score_diff(detour, storage_count);
+
                 let transition = Transition::new(
                     hash,
                     state_id,
                     Storage::In(row as u8),
                     Storage::Out(goal.row() as u8),
                     self.score + score_diff,
-                    self.storage_count,
+                    storage_count,
                     container,
                 );
                 beam.push(transition);
@@ -265,14 +270,16 @@ impl State {
                     0
                 };
 
-                let score_diff = detour;
+                let storage_count = self.storage_count - 1;
+                let score_diff = Self::score_diff(detour, storage_count);
+
                 let transition = Transition::new(
                     hash,
                     state_id,
                     Storage::Left(index as u8),
                     Storage::Out(goal.row() as u8),
                     self.score + score_diff,
-                    self.storage_count - 1,
+                    storage_count,
                     container,
                 );
                 beam.push(transition);
@@ -292,14 +299,15 @@ impl State {
 
             // ゴールへ
             if self.out_next[goal.row()] == container.index() as u8 {
-                let score_diff = 0;
+                let storage_count = self.storage_count - 1;
+                let score_diff = Self::score_diff(0, storage_count);
                 let transition = Transition::new(
                     hash,
                     state_id,
                     Storage::Right(index as u8),
                     Storage::Out(goal.row() as u8),
                     self.score + score_diff,
-                    self.storage_count - 1,
+                    storage_count,
                     container,
                 );
                 beam.push(transition);
@@ -314,7 +322,7 @@ struct Transition {
     state_id: u32,
     from: Storage,
     to: Storage,
-    score: u16,
+    score: u32,
     storage_count: u8,
     container: Container,
 }
@@ -325,7 +333,7 @@ impl Transition {
         state_id: u32,
         from: Storage,
         to: Storage,
-        score: u16,
+        score: u32,
         storage_count: u8,
         container: Container,
     ) -> Self {
