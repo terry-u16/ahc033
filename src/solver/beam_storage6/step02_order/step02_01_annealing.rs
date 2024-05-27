@@ -3,7 +3,7 @@ use crate::{
     common::ChangeMinMax as _,
     grid::Coord,
     problem::{Container, Input},
-    solver::beam::step02_order::Turns,
+    solver::beam_storage6::step02_order::Turns,
 };
 use itertools::Itertools;
 use rand::prelude::*;

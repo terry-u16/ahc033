@@ -1,4 +1,4 @@
-pub mod beam;
+pub mod beam_storage6;
 pub mod beam_storage8;
 pub mod single_crane;
 pub mod beam_storage4;

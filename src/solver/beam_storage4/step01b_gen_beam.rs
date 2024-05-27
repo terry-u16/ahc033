@@ -22,7 +22,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
     let mut rng = Pcg64Mcg::from_entropy();
     let mut completed_list: Vec<Option<State>> = vec![None; u8::MAX as usize];
     let mut beam_width_suggester =
-        BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.5, 3000, 300, 10000, 1);
+        BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.25, 1500, 300, 10000, 1);
     let mut hashset = HashSet::new();
 
     for turn in 0..MAX_TURN {

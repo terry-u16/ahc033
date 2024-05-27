@@ -9,7 +9,7 @@ mod solver;
 use crate::{
     common::ChangeMinMax,
     solver::{
-        beam::BeamSolver, beam_storage4::BeamSolver4, beam_storage8::BeamSolver8,
+        beam_storage4::BeamSolver4, beam_storage6::BeamSolver6, beam_storage8::BeamSolver8,
         single_crane::SingleCraneSolver, Solver,
     },
 };
@@ -25,62 +25,44 @@ fn main() -> Result<(), &'static str> {
     let mut rng = Pcg64Mcg::from_entropy();
 
     let solver = BeamSolver4::new(rng.gen(), best_score as usize);
-    match solver.solve(&input) {
-        Ok(result) => {
-            let score = result.score();
+    solve(solver, &input, &mut best_score, &mut best_result);
 
-            if best_score.change_min(score) {
-                best_result = result;
-                eprintln!("score updated!: {}", score);
-            }
-        }
-        Err(err) => {
-            eprintln!("{}", err);
+    eprintln!("elapsed: {:?}", since.elapsed());
 
-            // 一時保管場所は基本的に6箇所だが、6箇所で足りない場合があるため8箇所も試す
-            if since.elapsed().as_secs_f64() <= 0.5 {
-                eprintln!("Trying BeamSolver8...");
-                let solver = BeamSolver::new(rng.gen(), best_score as usize);
+    let has_enough_time = since.elapsed().as_secs_f64() <= 0.05;
+    let solver = BeamSolver6::new(rng.gen(), best_score as usize, has_enough_time);
+    solve(solver, &input, &mut best_score, &mut best_result);
 
-                match solver.solve(&input) {
-                    Ok(result) => {
-                        let score = result.score();
+    eprintln!("elapsed: {:?}", since.elapsed());
 
-                        if best_score.change_min(score) {
-                            best_result = result;
-                            eprintln!("score updated!: {}", score);
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("{}", err);
-
-                        // 一時保管場所は基本的に6箇所だが、6箇所で足りない場合があるため8箇所も試す
-                        if since.elapsed().as_secs_f64() <= 0.5 {
-                            eprintln!("Trying BeamSolver8...");
-                            let solver = BeamSolver8::new(rng.gen(), best_score as usize);
-
-                            match solver.solve(&input) {
-                                Ok(result) => {
-                                    let score = result.score();
-
-                                    if best_score.change_min(score) {
-                                        best_result = result;
-                                        eprintln!("score updated!: {}", score);
-                                    }
-                                }
-                                Err(err) => {
-                                    eprintln!("{}", err);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    };
+    if best_score >= 100 && since.elapsed().as_secs_f64() <= 0.5 {
+        let solver = BeamSolver8::new(rng.gen(), best_score as usize);
+        solve(solver, &input, &mut best_score, &mut best_result);
+    }
 
     print!("{}", best_result.output());
     eprintln!("Score: {}", best_result.score());
 
     Ok(())
+}
+
+fn solve(
+    solver: impl Solver,
+    input: &Input,
+    best_score: &mut u32,
+    best_result: &mut solver::SolverResult,
+) {
+    match solver.solve(&input) {
+        Ok(result) => {
+            let score = result.score();
+
+            if best_score.change_min(score) {
+                *best_result = result;
+                eprintln!("score updated!: {}", score);
+            }
+        }
+        Err(err) => {
+            eprintln!("{}", err);
+        }
+    }
 }

@@ -1,7 +1,7 @@
 use crate::{
     grid::Coord,
     problem::Input,
-    solver::beam::{step02_order::SubTask, Precalc},
+    solver::beam_storage6::{step02_order::SubTask, Precalc},
 };
 use itertools::Itertools;
 use std::{collections::HashMap, iter::repeat};
