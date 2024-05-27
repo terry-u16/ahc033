@@ -16,18 +16,18 @@ mod step01b_gen_beam;
 mod step02_order;
 mod step03_execute;
 
-pub struct BeamSolver {
+pub struct BeamSolver4 {
     seed: u64,
     max_turn: usize,
 }
 
-impl BeamSolver {
+impl BeamSolver4 {
     pub fn new(seed: u64, max_turn: usize) -> Self {
         Self { seed, max_turn }
     }
 }
 
-impl Solver for BeamSolver {
+impl Solver for BeamSolver4 {
     fn solve(&self, input: &crate::problem::Input) -> Result<super::SolverResult, &'static str> {
         let mut rng = Pcg64Mcg::seed_from_u64(self.seed);
 
@@ -87,18 +87,16 @@ struct DistDict {
 }
 
 impl DistDict {
-    const STORAGES: [Coord; 11] = [
+    const STORAGES: [Coord; 9] = [
         Coord::new(0, 0),
         Coord::new(1, 0),
         Coord::new(2, 0),
         Coord::new(3, 0),
         Coord::new(4, 0),
-        Coord::new(0, 2),
-        Coord::new(2, 2),
-        Coord::new(4, 2),
-        Coord::new(0, 3),
-        Coord::new(2, 3),
-        Coord::new(4, 3),
+        Coord::new(1, 2),
+        Coord::new(3, 2),
+        Coord::new(1, 3),
+        Coord::new(3, 3),
     ];
 
     fn new(avoid_inf: bool) -> Self {

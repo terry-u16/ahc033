@@ -9,7 +9,8 @@ mod solver;
 use crate::{
     common::ChangeMinMax,
     solver::{
-        beam::BeamSolver, beam_storage8::BeamSolver8, single_crane::SingleCraneSolver, Solver,
+        beam::BeamSolver, beam_storage4::BeamSolver4, beam_storage8::BeamSolver8,
+        single_crane::SingleCraneSolver, Solver,
     },
 };
 use problem::Input;
@@ -23,7 +24,7 @@ fn main() -> Result<(), &'static str> {
     let mut best_score = best_result.score();
     let mut rng = Pcg64Mcg::from_entropy();
 
-    let solver = BeamSolver::new(rng.gen(), best_score as usize);
+    let solver = BeamSolver4::new(rng.gen(), best_score as usize);
     match solver.solve(&input) {
         Ok(result) => {
             let score = result.score();
@@ -39,7 +40,7 @@ fn main() -> Result<(), &'static str> {
             // 一時保管場所は基本的に6箇所だが、6箇所で足りない場合があるため8箇所も試す
             if since.elapsed().as_secs_f64() <= 0.5 {
                 eprintln!("Trying BeamSolver8...");
-                let solver = BeamSolver8::new(rng.gen(), best_score as usize);
+                let solver = BeamSolver::new(rng.gen(), best_score as usize);
 
                 match solver.solve(&input) {
                     Ok(result) => {
@@ -52,6 +53,26 @@ fn main() -> Result<(), &'static str> {
                     }
                     Err(err) => {
                         eprintln!("{}", err);
+
+                        // 一時保管場所は基本的に6箇所だが、6箇所で足りない場合があるため8箇所も試す
+                        if since.elapsed().as_secs_f64() <= 0.5 {
+                            eprintln!("Trying BeamSolver8...");
+                            let solver = BeamSolver8::new(rng.gen(), best_score as usize);
+
+                            match solver.solve(&input) {
+                                Ok(result) => {
+                                    let score = result.score();
+
+                                    if best_score.change_min(score) {
+                                        best_result = result;
+                                        eprintln!("score updated!: {}", score);
+                                    }
+                                }
+                                Err(err) => {
+                                    eprintln!("{}", err);
+                                }
+                            }
+                        }
                     }
                 }
             }
