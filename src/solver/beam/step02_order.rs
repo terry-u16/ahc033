@@ -28,6 +28,7 @@ pub(super) fn order_tasks(
     }
 
     let step1_duration = 0.5 / tasks.len() as f64;
+    let step2_duration = 1.0;
 
     'main: for tasks in tasks {
         let mut state = State::new(&tasks, |c, i| c.unwrap_or(i % Input::N));
@@ -63,7 +64,6 @@ pub(super) fn order_tasks(
         return Err("no valid state found");
     };
 
-    let step2_duration = 1.0;
     let state = step02_01_annealing::annealing(&env, state, step2_duration);
 
     step02_02_breakdown::breakdown(&env, &state)

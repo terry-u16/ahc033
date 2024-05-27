@@ -58,11 +58,9 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
             b.sort_unstable();
             hashset.clear();
             let mut count = 0;
-            let mut hashhit = 0;
 
             for state in b.iter_mut() {
                 if !hashset.insert(state.hash) {
-                    hashhit += 1;
                     continue;
                 }
 
@@ -74,8 +72,6 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
 
                 state.gen_next(&env, &mut beam, &mut history, &mut rng);
             }
-
-            eprintln!("hashhit: {} / {}", hashhit, b.len());
         }
     }
 
