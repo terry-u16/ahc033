@@ -7,7 +7,6 @@ use crate::{
     grid::Coord,
     problem::{Container, CraneState, Grid, Input},
 };
-use itertools::Itertools;
 use rand::prelude::*;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -31,7 +30,7 @@ pub(super) fn order_tasks(
     let step1_duration = 0.5 / tasks.len() as f64;
 
     for tasks in tasks {
-        let mut state = State::new(&tasks, |i| i % Input::N);
+        let mut state = State::new(&tasks, |c, i| c.unwrap_or(i % Input::N));
 
         loop {
             if state.calc_score(&env, 1000).is_ok() {
@@ -39,7 +38,7 @@ pub(super) fn order_tasks(
             }
 
             eprintln!("retrying...");
-            state = State::new(&tasks, |_| rng.gen_range(0..Input::N));
+            state = State::new(&tasks, |_, _| rng.gen_range(0..Input::N));
         }
 
         let state = step02_01_annealing::annealing(&env, state, step1_duration);
@@ -57,7 +56,7 @@ pub(super) fn order_tasks(
         return Err("no valid state found");
     };
 
-    let step2_duration = 0.5;
+    let step2_duration = 1.0;
     let state = step02_01_annealing::annealing(&env, state, step2_duration);
 
     step02_02_breakdown::breakdown(&env, &state)
@@ -88,29 +87,26 @@ struct State {
 }
 
 impl State {
-    fn new(tasks: &[Task], mut assign_fn: impl FnMut(usize) -> usize) -> Self {
-        let all_tasks = tasks
-            .iter()
-            .map(|t| {
-                if t.from().col() == 0 {
-                    if t.to().col() == Input::N - 1 {
-                        TaskType::Direct(t.container(), t.from(), t.to())
-                    } else {
-                        TaskType::ToTemporary(t.container(), t.from(), t.to())
-                    }
+    fn new(tasks: &[Task], mut assign_fn: impl FnMut(Option<usize>, usize) -> usize) -> Self {
+        let mut assigned_tasks = [vec![], vec![], vec![], vec![], vec![]];
+
+        for (i, task) in tasks.iter().enumerate() {
+            let t = if task.from().col() == 0 {
+                if task.to().col() == Input::N - 1 {
+                    TaskType::Direct(task.container(), task.from(), task.to())
                 } else {
-                    TaskType::FromTemporary(t.container(), t.from(), t.to())
+                    TaskType::ToTemporary(task.container(), task.from(), task.to())
                 }
-            })
-            .collect_vec();
+            } else {
+                TaskType::FromTemporary(task.container(), task.from(), task.to())
+            };
 
-        let mut tasks = [vec![], vec![], vec![], vec![], vec![]];
-
-        for (i, &task) in all_tasks.iter().enumerate() {
-            tasks[assign_fn(i)].push(task);
+            assigned_tasks[assign_fn(task.crane(), i)].push(t);
         }
 
-        Self { tasks }
+        Self {
+            tasks: assigned_tasks,
+        }
     }
 
     fn calc_score(&self, env: &Env, max_turn: usize) -> Result<f64, &'static str> {

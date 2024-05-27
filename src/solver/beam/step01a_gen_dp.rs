@@ -16,18 +16,24 @@ const N2: usize = N * N;
 
 #[derive(Debug, Clone)]
 pub struct Task {
+    crane: Option<u8>,
     container: Container,
     from: Coord,
     to: Coord,
 }
 
 impl Task {
-    pub fn new(container: Container, from: Coord, to: Coord) -> Self {
+    pub fn new(crane: Option<u8>, container: Container, from: Coord, to: Coord) -> Self {
         Self {
+            crane,
             container,
             from,
             to,
         }
+    }
+
+    pub fn crane(&self) -> Option<usize> {
+        self.crane.map(|c| c as usize)
     }
 
     pub fn container(&self) -> Container {
@@ -82,7 +88,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
 
         if container.index() == next_shippings[to.row()] {
             next_shippings[to.row()] += 1;
-            let task = Task::new(container, from, to);
+            let task = Task::new(None, container, from, to);
             tasks.push(task);
         } else {
             // ベストな場所を探す
@@ -105,7 +111,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
             match best_pos {
                 Some(best_pos) => {
                     positions[container.index()] = Some(best_pos);
-                    let task = Task::new(container, from, best_pos);
+                    let task = Task::new(None, container, from, best_pos);
                     tasks.push(task);
                     board[best_pos] = true;
                 }
@@ -143,6 +149,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
             positions[container] = None;
             next_shippings[Input::get_goal(Container::new(container)).row()] += 1;
             let task = Task::new(
+                None,
                 Container::new(container),
                 pos,
                 Input::get_goal(Container::new(container)),

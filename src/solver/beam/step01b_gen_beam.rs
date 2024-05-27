@@ -24,7 +24,7 @@ pub(super) fn generate_tasks(input: &Input, precalc: &Precalc) -> Result<Vec<Tas
     let mut beam_width_suggester =
         BayesianBeamWidthSuggester::new(MAX_TURN, 5, 0.5, 3000, 300, 10000, 1);
 
-    for turn in 0..100 {
+    for turn in 0..MAX_TURN {
         let beam_width = beam_width_suggester.suggest();
 
         if let Some(completed) = completed_list[turn as usize] {
@@ -348,7 +348,7 @@ impl State {
                 state.cranes[best_crane] = goal;
 
                 // historyの追加
-                let task = Task::new(container, from, goal);
+                let task = Task::new(Some(best_crane as u8), container, from, goal);
                 state.history = history.push(task, state.history);
                 state.dfs(
                     env,
@@ -402,7 +402,7 @@ impl State {
                     state.crane_avail_turns[best_crane] = crane_avail_turn;
 
                     // historyの追加
-                    let task = Task::new(container, from, to);
+                    let task = Task::new(Some(best_crane as u8), container, from, to);
                     state.history = history.push(task, state.history);
                     state.dfs(
                         env,
