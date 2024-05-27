@@ -17,7 +17,7 @@ const LEFT_STORAGES: [Coord; HALF_STORAGE_LEN] =
 const RIGHT_STORAGES: [Coord; HALF_STORAGE_LEN] =
     [Coord::new(0, 3), Coord::new(2, 3), Coord::new(4, 3)];
 
-pub(super) fn beam(input: &Input) -> Vec<Task> {
+pub(super) fn beam(input: &Input) -> Result<Vec<Task>, &'static str> {
     let env = Env::new(input);
     let mut all_states = vec![State::init(&env)];
     let mut beam = vec![vec![]; STORAGE_LEN + 1];
@@ -75,10 +75,14 @@ pub(super) fn beam(input: &Input) -> Vec<Task> {
         }
     }
 
+    if !best_state.is_completed() {
+        return Err("failed to generate tasks");
+    }
+
     let history = history.collect(best_state.hist_index);
     eprintln!("best_score: {}", best_state.score());
 
-    history.iter().map(|t| t.to_task()).collect_vec()
+    Ok(history.iter().map(|t| t.to_task()).collect_vec())
 }
 
 struct Env<'a> {

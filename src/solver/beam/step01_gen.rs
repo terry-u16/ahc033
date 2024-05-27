@@ -48,7 +48,7 @@ pub(super) fn generate_tasks(input: &Input, rng: &mut impl Rng) -> Result<Vec<Ta
     let (_, history) = dp(input);
     eprintln!("{:?}", history);
 
-    return Ok(step01_02_beam::beam(input));
+    return step01_02_beam::beam(input);
 
     let mut tasks = vec![];
     let mut containers = input
